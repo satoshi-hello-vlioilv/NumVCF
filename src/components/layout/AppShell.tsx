@@ -74,6 +74,9 @@ export function AppShell() {
         <div className="flex items-center gap-2 flex-shrink-0">
           <FontAwesomeIcon icon={faAddressBook} className="text-primary-500 text-lg" />
           <span className="font-bold text-sm text-primary-700 dark:text-primary-300 tracking-tight">NumVCF</span>
+          <span className="px-1.5 py-0.5 text-2xs font-mono font-medium text-ink-secondary bg-surface-card dark:bg-dark-surface rounded">
+            v{__APP_VERSION__}
+          </span>
         </div>
 
         {/* Search */}
