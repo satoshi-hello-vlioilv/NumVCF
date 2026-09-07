@@ -24,21 +24,19 @@ export const useFormatProfileStore = create<FormatProfileStore>()(
 
     loadProfiles: async () => {
       const stored = await db.formatProfiles.toArray();
-      if (stored.length === 0) {
-        await db.formatProfiles.bulkAdd(BUILTIN_PROFILES);
-        set(s => { s.profiles = BUILTIN_PROFILES; s.isLoaded = true; });
+      const builtinIds = new Set(BUILTIN_PROFILES.map(p => p.id));
+      const hasAll = BUILTIN_PROFILES.every(bp => stored.some(sp => sp.id === bp.id));
+
+      if (!hasAll) {
+        // bulkPut (not bulkAdd) so concurrent calls (e.g. React StrictMode's
+        // double-invoked effects) upsert idempotently instead of throwing
+        // a duplicate-key BulkError.
+        await db.formatProfiles.bulkPut(BUILTIN_PROFILES);
+        const all = await db.formatProfiles.toArray();
+        set(s => { s.profiles = all; s.isLoaded = true; });
       } else {
-        const builtinIds = new Set(BUILTIN_PROFILES.map(p => p.id));
-        const hasAll = BUILTIN_PROFILES.every(bp => stored.some(sp => sp.id === bp.id));
-        if (!hasAll) {
-          const missingProfiles = BUILTIN_PROFILES.filter(bp => !stored.some(sp => sp.id === bp.id));
-          await db.formatProfiles.bulkAdd(missingProfiles);
-          const all = await db.formatProfiles.toArray();
-          set(s => { s.profiles = all; s.isLoaded = true; });
-        } else {
-          const userProfiles = stored.filter(p => !builtinIds.has(p.id));
-          set(s => { s.profiles = [...BUILTIN_PROFILES, ...userProfiles]; s.isLoaded = true; });
-        }
+        const userProfiles = stored.filter(p => !builtinIds.has(p.id));
+        set(s => { s.profiles = [...BUILTIN_PROFILES, ...userProfiles]; s.isLoaded = true; });
       }
     },
 

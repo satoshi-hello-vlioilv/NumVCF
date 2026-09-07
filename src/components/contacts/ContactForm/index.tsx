@@ -16,6 +16,21 @@ const labeledValueSchema = z.object({
   isPrimary: z.boolean().optional(),
 });
 
+const addressValueSchema = z.object({
+  postalCode: z.string().optional(),
+  region: z.string().optional(),
+  city: z.string().optional(),
+  street: z.string().optional(),
+  country: z.string().optional(),
+});
+
+const labeledAddressSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  labelDisplay: z.string().optional(),
+  value: addressValueSchema,
+});
+
 const schema = z.object({
   nameFormatted: z.string().min(1, '名前は必須です'),
   nameFamily: z.string().optional(),
@@ -27,6 +42,7 @@ const schema = z.object({
   phones: z.array(labeledValueSchema),
   emails: z.array(labeledValueSchema),
   urls: z.array(labeledValueSchema),
+  addresses: z.array(labeledAddressSchema),
   birthday: z.string().optional(),
   notes: z.string().optional(),
 });
@@ -41,6 +57,16 @@ const PHONE_LABELS = [
   { value: 'other',  display: 'その他' },
 ];
 const EMAIL_LABELS = [
+  { value: 'work',  display: '会社' },
+  { value: 'home',  display: '自宅' },
+  { value: 'other', display: 'その他' },
+];
+const URL_LABELS = [
+  { value: 'work',  display: '会社' },
+  { value: 'home',  display: '自宅' },
+  { value: 'other', display: 'その他' },
+];
+const ADDRESS_LABELS = [
   { value: 'work',  display: '会社' },
   { value: 'home',  display: '自宅' },
   { value: 'other', display: 'その他' },
@@ -69,21 +95,29 @@ export function ContactForm({ contact, onSave }: ContactFormProps) {
       phones: contact.phones,
       emails: contact.emails,
       urls: contact.urls,
+      addresses: contact.addresses,
       birthday: contact.birthday,
       notes: contact.meta.notes,
     } : {
       phones: [{ id: crypto.randomUUID(), label: 'mobile', labelDisplay: '携帯', value: '' }],
       emails: [],
       urls: [],
+      addresses: [],
     },
   });
 
   const { fields: phoneFields, append: appendPhone, remove: removePhone } = useFieldArray({ control, name: 'phones' });
   const { fields: emailFields, append: appendEmail, remove: removeEmail } = useFieldArray({ control, name: 'emails' });
-  useFieldArray({ control, name: 'urls' });
+  const { fields: urlFields, append: appendUrl, remove: removeUrl } = useFieldArray({ control, name: 'urls' });
+  const { fields: addressFields, append: appendAddress, remove: removeAddress } = useFieldArray({ control, name: 'addresses' });
 
   const onSubmit = async (data: FormData) => {
     const now = new Date().toISOString();
+    const phones = data.phones.filter(p => p.value);
+    const emails = data.emails.filter(e => e.value);
+    const urls = data.urls.filter(u => u.value);
+    const addresses = data.addresses.filter(a => Object.values(a.value).some(v => v));
+
     if (contact) {
       await updateContact(contact.id, {
         name: { formatted: data.nameFormatted, family: data.nameFamily, given: data.nameGiven },
@@ -91,9 +125,10 @@ export function ContactForm({ contact, onSave }: ContactFormProps) {
         organization: data.organization,
         department: data.department,
         title: data.title,
-        phones: data.phones.filter(p => p.value),
-        emails: data.emails.filter(e => e.value),
-        urls: data.urls.filter(u => u.value),
+        phones,
+        emails,
+        urls,
+        addresses,
         birthday: data.birthday,
         meta: { ...contact.meta, notes: data.notes, updatedAt: now },
       });
@@ -107,10 +142,10 @@ export function ContactForm({ contact, onSave }: ContactFormProps) {
         organization: data.organization,
         department: data.department,
         title: data.title,
-        phones: data.phones.filter(p => p.value),
-        emails: data.emails.filter(e => e.value),
-        urls: data.urls.filter(u => u.value),
-        addresses: [],
+        phones,
+        emails,
+        urls,
+        addresses,
         socialProfiles: [],
         instantMessages: [],
         birthday: data.birthday,
@@ -132,6 +167,7 @@ export function ContactForm({ contact, onSave }: ContactFormProps) {
   const inputClass = "w-full px-3 py-2 text-sm border border-surface-border dark:border-dark-border rounded-lg bg-white dark:bg-dark-surface text-ink-primary focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-400 transition-all";
   const labelClass = "block text-xs font-medium text-ink-secondary mb-1";
   const sectionClass = "border-b border-surface-border dark:border-dark-border pb-5 mb-5";
+  const selectClass = "text-xs border border-surface-border dark:border-dark-border rounded-lg px-2 py-2 bg-white dark:bg-dark-surface text-ink-secondary focus:outline-none focus:ring-2 focus:ring-primary-300 w-24 flex-shrink-0";
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="h-full flex flex-col">
@@ -193,13 +229,7 @@ export function ContactForm({ contact, onSave }: ContactFormProps) {
                   control={control}
                   name={`phones.${idx}.label`}
                   render={({ field: f }) => (
-                    <select
-                      {...f}
-                      onChange={e => {
-                        f.onChange(e.target.value);
-                      }}
-                      className="text-xs border border-surface-border dark:border-dark-border rounded-lg px-2 py-2 bg-white dark:bg-dark-surface text-ink-secondary focus:outline-none focus:ring-2 focus:ring-primary-300 w-24 flex-shrink-0"
-                    >
+                    <select {...f} className={selectClass}>
                       {PHONE_LABELS.map(l => <option key={l.value} value={l.value}>{l.display}</option>)}
                     </select>
                   )}
@@ -231,7 +261,7 @@ export function ContactForm({ contact, onSave }: ContactFormProps) {
                   control={control}
                   name={`emails.${idx}.label`}
                   render={({ field: f }) => (
-                    <select {...f} className="text-xs border border-surface-border dark:border-dark-border rounded-lg px-2 py-2 bg-white dark:bg-dark-surface text-ink-secondary focus:outline-none focus:ring-2 focus:ring-primary-300 w-24 flex-shrink-0">
+                    <select {...f} className={selectClass}>
                       {EMAIL_LABELS.map(l => <option key={l.value} value={l.value}>{l.display}</option>)}
                     </select>
                   )}
@@ -244,6 +274,71 @@ export function ContactForm({ contact, onSave }: ContactFormProps) {
             ))}
             <button type="button" onClick={() => appendEmail({ id: crypto.randomUUID(), label: 'work', labelDisplay: '会社', value: '' })} className="flex items-center gap-1.5 text-xs text-primary-500 hover:text-primary-700 transition-colors">
               <FontAwesomeIcon icon={faPlus} className="text-xs" />メールを追加
+            </button>
+          </div>
+        </section>
+
+        {/* URLs */}
+        <section className={sectionClass}>
+          <h3 className="text-xs font-semibold text-ink-placeholder uppercase tracking-wider mb-3">Web / URL</h3>
+          <div className="space-y-2">
+            {urlFields.map((field, idx) => (
+              <div key={field.id} className="flex gap-2 items-center">
+                <Controller
+                  control={control}
+                  name={`urls.${idx}.label`}
+                  render={({ field: f }) => (
+                    <select {...f} className={selectClass}>
+                      {URL_LABELS.map(l => <option key={l.value} value={l.value}>{l.display}</option>)}
+                    </select>
+                  )}
+                />
+                <input {...register(`urls.${idx}.value`)} className={`${inputClass} flex-1`} placeholder="https://example.com" type="url" />
+                <button type="button" onClick={() => removeUrl(idx)} className="p-2 text-ink-placeholder hover:text-status-danger transition-colors flex-shrink-0">
+                  <FontAwesomeIcon icon={faTrash} className="text-xs" />
+                </button>
+              </div>
+            ))}
+            <button type="button" onClick={() => appendUrl({ id: crypto.randomUUID(), label: 'work', labelDisplay: '会社', value: '' })} className="flex items-center gap-1.5 text-xs text-primary-500 hover:text-primary-700 transition-colors">
+              <FontAwesomeIcon icon={faPlus} className="text-xs" />URLを追加
+            </button>
+          </div>
+        </section>
+
+        {/* Addresses */}
+        <section className={sectionClass}>
+          <h3 className="text-xs font-semibold text-ink-placeholder uppercase tracking-wider mb-3">住所</h3>
+          <div className="space-y-3">
+            {addressFields.map((field, idx) => (
+              <div key={field.id} className="border border-surface-border dark:border-dark-border rounded-lg p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <Controller
+                    control={control}
+                    name={`addresses.${idx}.label`}
+                    render={({ field: f }) => (
+                      <select {...f} className={selectClass}>
+                        {ADDRESS_LABELS.map(l => <option key={l.value} value={l.value}>{l.display}</option>)}
+                      </select>
+                    )}
+                  />
+                  <button type="button" onClick={() => removeAddress(idx)} className="p-1.5 text-ink-placeholder hover:text-status-danger transition-colors">
+                    <FontAwesomeIcon icon={faTrash} className="text-xs" />
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <input {...register(`addresses.${idx}.value.postalCode`)} className={inputClass} placeholder="郵便番号 150-0001" />
+                  <input {...register(`addresses.${idx}.value.region`)} className={inputClass} placeholder="都道府県" />
+                </div>
+                <input {...register(`addresses.${idx}.value.city`)} className={inputClass} placeholder="市区町村" />
+                <input {...register(`addresses.${idx}.value.street`)} className={inputClass} placeholder="番地・建物名" />
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => appendAddress({ id: crypto.randomUUID(), label: 'work', labelDisplay: '会社', value: {} })}
+              className="flex items-center gap-1.5 text-xs text-primary-500 hover:text-primary-700 transition-colors"
+            >
+              <FontAwesomeIcon icon={faPlus} className="text-xs" />住所を追加
             </button>
           </div>
         </section>

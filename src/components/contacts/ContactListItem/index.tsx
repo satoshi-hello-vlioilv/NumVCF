@@ -1,25 +1,22 @@
 import type { Contact } from '../../../types/contact';
 import { useUIStore } from '../../../store/uiStore';
 import { useContactStore } from '../../../store/contactStore';
-import { CompactItem } from './Compact';
+import { ContactRow } from './ContactRow';
 
 interface ContactListItemProps {
   contact: Contact;
 }
 
 export function ContactListItem({ contact }: ContactListItemProps) {
-  const { selectedIds } = useUIStore();
+  const { density, selectedIds } = useUIStore();
   const { selectedId } = useContactStore();
 
-  const isSelected = selectedId === contact.id;
-  const isChecked = selectedIds.has(contact.id);
-
-  // For now Compact handles all density (Comfortable/Spacious extend with more rows)
   return (
-    <CompactItem
+    <ContactRow
       contact={contact}
-      isSelected={isSelected}
-      isChecked={isChecked}
+      density={density}
+      isSelected={selectedId === contact.id}
+      isChecked={selectedIds.has(contact.id)}
     />
   );
 }
