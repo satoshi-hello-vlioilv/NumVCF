@@ -1,9 +1,10 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faAddressBook, faFileImport, faFileExport, faGear,
-  faMoon, faSun, faPlus, faTrash,
+  faMoon, faSun, faPlus, faTrash, faEllipsisVertical,
+  faSliders, faCheck, faChevronDown, faXmark,
 } from '@fortawesome/free-solid-svg-icons';
 import { SearchBar } from '../search/SearchBar';
 import { ContactList } from '../contacts/ContactList';
@@ -12,9 +13,16 @@ import { ImportCenter } from '../vcf/ImportCenter';
 import { ExportCenter } from '../vcf/ExportCenter';
 import { ToastContainer } from '../ui/Toast';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { Popover, PopoverItem, PopoverDivider, PopoverLabel } from '../ui/Popover';
 import { useContactStore } from '../../store/contactStore';
 import { useUIStore } from '../../store/uiStore';
-import { useState } from 'react';
+import type { DisplayDensity } from '../../types/contact';
+
+const DENSITY_LABELS: Record<DisplayDensity, string> = {
+  compact: 'コンパクト',
+  comfortable: '標準',
+  spacious: 'ゆったり',
+};
 
 export function AppShell() {
   const navigate = useNavigate();
@@ -82,7 +90,9 @@ export function AppShell() {
         {/* Search */}
         <SearchBar />
 
-        {/* Actions */}
+        {/* Primary action + overflow menu — secondary actions (import,
+            export, dark mode, settings) live in a popover instead of four
+            separate always-visible icon buttons. */}
         <div className="flex items-center gap-1 flex-shrink-0">
           <button
             onClick={() => navigate('/add')}
@@ -92,70 +102,85 @@ export function AppShell() {
             <FontAwesomeIcon icon={faPlus} />
             <span className="hidden sm:inline">追加</span>
           </button>
-          <button
-            onClick={() => setImportModalOpen(true)}
-            title="VCF インポート (Ctrl+I)"
-            className="p-2 text-ink-secondary hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+
+          <Popover
+            trigger={({ onClick, isOpen }) => (
+              <button
+                onClick={onClick}
+                title="その他の操作"
+                className={`p-2 rounded-lg transition-colors ${isOpen ? 'bg-surface-card text-ink-primary' : 'text-ink-secondary hover:text-ink-primary hover:bg-surface-card'}`}
+              >
+                <FontAwesomeIcon icon={faEllipsisVertical} className="text-sm" />
+              </button>
+            )}
           >
-            <FontAwesomeIcon icon={faFileImport} className="text-sm" />
-          </button>
-          <button
-            onClick={() => setExportModalOpen(true)}
-            title="VCF エクスポート (Ctrl+Shift+E)"
-            className="p-2 text-ink-secondary hover:text-teal-600 hover:bg-teal-50 rounded-lg transition-colors"
-          >
-            <FontAwesomeIcon icon={faFileExport} className="text-sm" />
-          </button>
-          <button
-            onClick={toggleDarkMode}
-            title="ダークモード切替"
-            className="p-2 text-ink-secondary hover:text-ink-primary hover:bg-surface-card rounded-lg transition-colors"
-          >
-            <FontAwesomeIcon icon={isDarkMode ? faSun : faMoon} className="text-sm" />
-          </button>
-          <button
-            onClick={() => navigate('/settings')}
-            title="設定"
-            className="p-2 text-ink-secondary hover:text-ink-primary hover:bg-surface-card rounded-lg transition-colors"
-          >
-            <FontAwesomeIcon icon={faGear} className="text-sm" />
-          </button>
+            {close => (
+              <>
+                <PopoverItem icon={faFileImport} label="VCF インポート" hint="Ctrl+I" onClick={() => { setImportModalOpen(true); close(); }} />
+                <PopoverItem icon={faFileExport} label="VCF エクスポート" hint="Ctrl+⇧E" onClick={() => { setExportModalOpen(true); close(); }} />
+                <PopoverDivider />
+                <PopoverItem icon={isDarkMode ? faSun : faMoon} label={isDarkMode ? 'ライトモードに切替' : 'ダークモードに切替'} onClick={() => { toggleDarkMode(); close(); }} />
+                <PopoverItem icon={faGear} label="設定" onClick={() => { navigate('/settings'); close(); }} />
+              </>
+            )}
+          </Popover>
         </div>
       </header>
 
       {/* Sub Bar: density + status */}
       <div className="flex-shrink-0 flex items-center gap-3 px-4 py-1.5 bg-surface-base dark:bg-dark-base border-b border-surface-border/60 dark:border-dark-border/60">
-        <div className="flex items-center gap-1">
-          {(['compact', 'comfortable', 'spacious'] as const).map(d => (
+        <Popover
+          align="left"
+          trigger={({ onClick, isOpen }) => (
             <button
-              key={d}
-              onClick={() => setDensity(d)}
-              className={`px-2 py-0.5 text-2xs rounded transition-colors ${density === d ? 'bg-primary-100 text-primary-700 font-medium' : 'text-ink-placeholder hover:text-ink-secondary'}`}
+              onClick={onClick}
+              className={`flex items-center gap-1.5 px-2 py-1 text-2xs rounded transition-colors ${isOpen ? 'bg-surface-card text-ink-primary' : 'text-ink-secondary hover:bg-surface-card'}`}
             >
-              {d === 'compact' ? 'コンパクト' : d === 'comfortable' ? '標準' : 'ゆったり'}
+              <FontAwesomeIcon icon={faSliders} className="text-2xs" />
+              表示: {DENSITY_LABELS[density]}
+              <FontAwesomeIcon icon={faChevronDown} className="text-2xs text-ink-placeholder" />
             </button>
-          ))}
-        </div>
+          )}
+        >
+          {close => (
+            <>
+              <PopoverLabel>表示密度</PopoverLabel>
+              {(['compact', 'comfortable', 'spacious'] as const).map(d => (
+                <PopoverItem
+                  key={d}
+                  icon={density === d ? faCheck : undefined}
+                  label={DENSITY_LABELS[d]}
+                  active={density === d}
+                  onClick={() => { setDensity(d); close(); }}
+                />
+              ))}
+            </>
+          )}
+        </Popover>
+
         <div className="flex-1" />
+
         {selectedIds.size > 0 ? (
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-primary-600 font-medium">{selectedIds.size} 件選択中</span>
-            <button
-              onClick={() => setShowDeleteConfirm(true)}
-              className="flex items-center gap-1 px-2 py-0.5 text-xs text-status-danger hover:bg-red-50 rounded transition-colors"
-            >
-              <FontAwesomeIcon icon={faTrash} className="text-2xs" />削除
-            </button>
-            <button
-              onClick={() => setExportModalOpen(true)}
-              className="flex items-center gap-1 px-2 py-0.5 text-xs text-teal-600 hover:bg-teal-50 rounded transition-colors"
-            >
-              <FontAwesomeIcon icon={faFileExport} className="text-2xs" />エクスポート
-            </button>
-            <button onClick={clearSelection} className="text-xs text-ink-placeholder hover:text-ink-secondary transition-colors">
-              解除
-            </button>
-          </div>
+          <Popover
+            trigger={({ onClick, isOpen }) => (
+              <button
+                onClick={onClick}
+                className={`flex items-center gap-1.5 px-2 py-1 text-xs rounded transition-colors ${isOpen ? 'bg-primary-100 text-primary-700' : 'text-primary-600 hover:bg-primary-50'}`}
+              >
+                <span className="font-medium">{selectedIds.size} 件選択中</span>
+                <FontAwesomeIcon icon={faChevronDown} className="text-2xs" />
+              </button>
+            )}
+          >
+            {close => (
+              <>
+                <PopoverItem icon={faFileExport} label="選択項目をエクスポート" onClick={() => { setExportModalOpen(true); close(); }} />
+                <PopoverItem icon={faTrash} label="選択項目を削除" variant="danger" onClick={() => { setShowDeleteConfirm(true); close(); }} />
+                <PopoverDivider />
+                <PopoverItem icon={faXmark} label="選択解除" onClick={() => { clearSelection(); close(); }} />
+              </>
+            )}
+          </Popover>
         ) : (
           <span className="text-xs text-ink-placeholder">{totalFiltered} 件</span>
         )}

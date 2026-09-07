@@ -60,16 +60,30 @@ export function tokenizeVCF(text: string): ParsedVCard[] {
   const vcards: ParsedVCard[] = [];
   let current: ParsedVCFProperty[] | null = null;
   let rawLines: string[] = [];
+  // Tracks nested BEGIN:VCARD blocks (e.g. the legacy AGENT property embeds
+  // a whole vCard as its value). Nested content is preserved in rawText but
+  // not parsed as top-level properties, so it can't corrupt the outer card's
+  // field boundaries.
+  let nestedDepth = 0;
 
   for (const line of lines) {
     const trimmed = line.trim();
     if (!trimmed) continue;
+    const upper = trimmed.toUpperCase();
 
-    if (trimmed.toUpperCase() === 'BEGIN:VCARD') {
-      current = [];
-      rawLines = [line];
-    } else if (trimmed.toUpperCase() === 'END:VCARD') {
-      if (current !== null) {
+    if (upper === 'BEGIN:VCARD') {
+      if (current === null) {
+        current = [];
+        rawLines = [line];
+      } else {
+        nestedDepth++;
+        rawLines.push(line);
+      }
+    } else if (upper === 'END:VCARD') {
+      if (nestedDepth > 0) {
+        nestedDepth--;
+        rawLines.push(line);
+      } else if (current !== null) {
         rawLines.push(line);
         vcards.push({ properties: current, rawText: rawLines.join('\n') });
         current = null;
@@ -77,8 +91,10 @@ export function tokenizeVCF(text: string): ParsedVCard[] {
       }
     } else if (current !== null) {
       rawLines.push(line);
-      const prop = parsePropertyLine(trimmed);
-      if (prop) current.push(prop);
+      if (nestedDepth === 0) {
+        const prop = parsePropertyLine(trimmed);
+        if (prop) current.push(prop);
+      }
     }
   }
 

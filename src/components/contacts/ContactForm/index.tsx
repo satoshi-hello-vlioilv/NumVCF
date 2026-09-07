@@ -1,12 +1,17 @@
+import { useState } from 'react';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faPlus, faTrash, faCheck, faXmark } from '@fortawesome/free-solid-svg-icons';
+import {
+  faPlus, faTrash, faCheck, faXmark,
+  faIdCard, faAddressBook, faLocationDot, faEllipsis,
+} from '@fortawesome/free-solid-svg-icons';
 import type { Contact } from '../../../types/contact';
 import { useContactStore } from '../../../store/contactStore';
 import { useUIStore } from '../../../store/uiStore';
 import { useNavigate } from 'react-router-dom';
+import { Tabs, type TabItem } from '../../ui/Tabs';
 
 const labeledValueSchema = z.object({
   id: z.string(),
@@ -48,6 +53,21 @@ const schema = z.object({
 });
 
 type FormData = z.infer<typeof schema>;
+type TabId = 'basic' | 'contact' | 'address' | 'other';
+
+const FORM_TABS: TabItem[] = [
+  { id: 'basic', label: '基本情報', icon: faIdCard },
+  { id: 'contact', label: '連絡先', icon: faAddressBook },
+  { id: 'address', label: '住所', icon: faLocationDot },
+  { id: 'other', label: 'その他', icon: faEllipsis },
+];
+
+const TAB_FIELDS: Record<TabId, (keyof FormData)[]> = {
+  basic: ['nameFormatted', 'nameFamily', 'nameGiven', 'nameKanaFormatted', 'organization', 'department', 'title'],
+  contact: ['phones', 'emails', 'urls'],
+  address: ['addresses'],
+  other: ['birthday', 'notes'],
+};
 
 const PHONE_LABELS = [
   { value: 'mobile', display: '携帯' },
@@ -81,6 +101,7 @@ export function ContactForm({ contact, onSave }: ContactFormProps) {
   const { addContact, updateContact } = useContactStore();
   const { addToast } = useUIStore();
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState<TabId>('basic');
 
   const { register, control, handleSubmit, formState: { errors, isSubmitting } } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -110,6 +131,8 @@ export function ContactForm({ contact, onSave }: ContactFormProps) {
   const { fields: emailFields, append: appendEmail, remove: removeEmail } = useFieldArray({ control, name: 'emails' });
   const { fields: urlFields, append: appendUrl, remove: removeUrl } = useFieldArray({ control, name: 'urls' });
   const { fields: addressFields, append: appendAddress, remove: removeAddress } = useFieldArray({ control, name: 'addresses' });
+
+  const tabHasError = (tabId: TabId) => TAB_FIELDS[tabId].some(field => field in errors);
 
   const onSubmit = async (data: FormData) => {
     const now = new Date().toISOString();
@@ -164,150 +187,168 @@ export function ContactForm({ contact, onSave }: ContactFormProps) {
     navigate('/');
   };
 
+  const onInvalid = () => {
+    const firstErrorTab = (Object.keys(TAB_FIELDS) as TabId[]).find(tabHasError);
+    if (firstErrorTab) setActiveTab(firstErrorTab);
+  };
+
   const inputClass = "w-full px-3 py-2 text-sm border border-surface-border dark:border-dark-border rounded-lg bg-white dark:bg-dark-surface text-ink-primary focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-400 transition-all";
   const labelClass = "block text-xs font-medium text-ink-secondary mb-1";
-  const sectionClass = "border-b border-surface-border dark:border-dark-border pb-5 mb-5";
   const selectClass = "text-xs border border-surface-border dark:border-dark-border rounded-lg px-2 py-2 bg-white dark:bg-dark-surface text-ink-secondary focus:outline-none focus:ring-2 focus:ring-primary-300 w-24 flex-shrink-0";
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="h-full flex flex-col">
-      <div className="flex-1 overflow-y-auto px-5 py-5 space-y-0">
-        {/* Name */}
-        <section className={sectionClass}>
-          <h3 className="text-xs font-semibold text-ink-placeholder uppercase tracking-wider mb-3">基本情報</h3>
-          <div className="space-y-3">
-            <div>
-              <label className={labelClass}>表示名 *</label>
-              <input {...register('nameFormatted')} className={inputClass} placeholder="山田 太郎" />
-              {errors.nameFormatted && <p className="text-xs text-status-danger mt-1">{errors.nameFormatted.message}</p>}
+    <form onSubmit={handleSubmit(onSubmit, onInvalid)} className="h-full flex flex-col">
+      {/* Tab bar (fixed) — content switches instead of scrolling through
+          one long form, keeping each screen within the viewport. */}
+      <div className="relative flex-shrink-0">
+        <Tabs tabs={FORM_TABS} activeId={activeTab} onChange={id => setActiveTab(id as TabId)} />
+        <div className="absolute top-1.5 left-0 right-0 flex px-2 pointer-events-none">
+          {FORM_TABS.map(tab => (
+            <div key={tab.id} className="flex-1 flex justify-center">
+              {tabHasError(tab.id as TabId) && (
+                <span className="w-1.5 h-1.5 rounded-full bg-status-danger" />
+              )}
             </div>
-            <div className="grid grid-cols-2 gap-2">
+          ))}
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-5 py-5">
+        {/* 基本情報 */}
+        {activeTab === 'basic' && (
+          <div className="space-y-5">
+            <div className="space-y-3">
               <div>
-                <label className={labelClass}>姓</label>
-                <input {...register('nameFamily')} className={inputClass} placeholder="山田" />
+                <label className={labelClass}>表示名 *</label>
+                <input {...register('nameFormatted')} className={inputClass} placeholder="山田 太郎" />
+                {errors.nameFormatted && <p className="text-xs text-status-danger mt-1">{errors.nameFormatted.message}</p>}
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className={labelClass}>姓</label>
+                  <input {...register('nameFamily')} className={inputClass} placeholder="山田" />
+                </div>
+                <div>
+                  <label className={labelClass}>名</label>
+                  <input {...register('nameGiven')} className={inputClass} placeholder="太郎" />
+                </div>
               </div>
               <div>
-                <label className={labelClass}>名</label>
-                <input {...register('nameGiven')} className={inputClass} placeholder="太郎" />
+                <label className={labelClass}>読み仮名</label>
+                <input {...register('nameKanaFormatted')} className={inputClass} placeholder="やまだ たろう" />
               </div>
             </div>
-            <div>
-              <label className={labelClass}>読み仮名</label>
-              <input {...register('nameKanaFormatted')} className={inputClass} placeholder="やまだ たろう" />
+
+            <div className="border-t border-surface-border dark:border-dark-border pt-5 space-y-3">
+              <h3 className="text-xs font-semibold text-ink-placeholder uppercase tracking-wider">組織</h3>
+              <div>
+                <label className={labelClass}>会社名</label>
+                <input {...register('organization')} className={inputClass} placeholder="株式会社サンプル" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className={labelClass}>部署</label>
+                  <input {...register('department')} className={inputClass} placeholder="営業部" />
+                </div>
+                <div>
+                  <label className={labelClass}>役職</label>
+                  <input {...register('title')} className={inputClass} placeholder="部長" />
+                </div>
+              </div>
             </div>
           </div>
-        </section>
+        )}
 
-        {/* Organization */}
-        <section className={sectionClass}>
-          <h3 className="text-xs font-semibold text-ink-placeholder uppercase tracking-wider mb-3">組織</h3>
-          <div className="space-y-3">
-            <div>
-              <label className={labelClass}>会社名</label>
-              <input {...register('organization')} className={inputClass} placeholder="株式会社サンプル" />
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className={labelClass}>部署</label>
-                <input {...register('department')} className={inputClass} placeholder="営業部" />
-              </div>
-              <div>
-                <label className={labelClass}>役職</label>
-                <input {...register('title')} className={inputClass} placeholder="部長" />
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Phones */}
-        <section className={sectionClass}>
-          <h3 className="text-xs font-semibold text-ink-placeholder uppercase tracking-wider mb-3">電話番号</h3>
-          <div className="space-y-2">
-            {phoneFields.map((field, idx) => (
-              <div key={field.id} className="flex gap-2 items-center">
-                <Controller
-                  control={control}
-                  name={`phones.${idx}.label`}
-                  render={({ field: f }) => (
-                    <select {...f} className={selectClass}>
-                      {PHONE_LABELS.map(l => <option key={l.value} value={l.value}>{l.display}</option>)}
-                    </select>
-                  )}
-                />
-                <input
-                  {...register(`phones.${idx}.value`)}
-                  className={`${inputClass} flex-1`}
-                  placeholder="090-0000-0000"
-                  type="tel"
-                />
-                <button type="button" onClick={() => removePhone(idx)} className="p-2 text-ink-placeholder hover:text-status-danger transition-colors flex-shrink-0">
-                  <FontAwesomeIcon icon={faTrash} className="text-xs" />
+        {/* 連絡先 */}
+        {activeTab === 'contact' && (
+          <div className="space-y-5">
+            <section>
+              <h3 className="text-xs font-semibold text-ink-placeholder uppercase tracking-wider mb-3">電話番号</h3>
+              <div className="space-y-2">
+                {phoneFields.map((field, idx) => (
+                  <div key={field.id} className="flex gap-2 items-center">
+                    <Controller
+                      control={control}
+                      name={`phones.${idx}.label`}
+                      render={({ field: f }) => (
+                        <select {...f} className={selectClass}>
+                          {PHONE_LABELS.map(l => <option key={l.value} value={l.value}>{l.display}</option>)}
+                        </select>
+                      )}
+                    />
+                    <input
+                      {...register(`phones.${idx}.value`)}
+                      className={`${inputClass} flex-1`}
+                      placeholder="090-0000-0000"
+                      type="tel"
+                    />
+                    <button type="button" onClick={() => removePhone(idx)} className="p-2 text-ink-placeholder hover:text-status-danger transition-colors flex-shrink-0">
+                      <FontAwesomeIcon icon={faTrash} className="text-xs" />
+                    </button>
+                  </div>
+                ))}
+                <button type="button" onClick={() => appendPhone({ id: crypto.randomUUID(), label: 'mobile', labelDisplay: '携帯', value: '' })} className="flex items-center gap-1.5 text-xs text-primary-500 hover:text-primary-700 transition-colors">
+                  <FontAwesomeIcon icon={faPlus} className="text-xs" />電話番号を追加
                 </button>
               </div>
-            ))}
-            <button type="button" onClick={() => appendPhone({ id: crypto.randomUUID(), label: 'mobile', labelDisplay: '携帯', value: '' })} className="flex items-center gap-1.5 text-xs text-primary-500 hover:text-primary-700 transition-colors">
-              <FontAwesomeIcon icon={faPlus} className="text-xs" />電話番号を追加
-            </button>
-          </div>
-        </section>
+            </section>
 
-        {/* Emails */}
-        <section className={sectionClass}>
-          <h3 className="text-xs font-semibold text-ink-placeholder uppercase tracking-wider mb-3">メールアドレス</h3>
-          <div className="space-y-2">
-            {emailFields.map((field, idx) => (
-              <div key={field.id} className="flex gap-2 items-center">
-                <Controller
-                  control={control}
-                  name={`emails.${idx}.label`}
-                  render={({ field: f }) => (
-                    <select {...f} className={selectClass}>
-                      {EMAIL_LABELS.map(l => <option key={l.value} value={l.value}>{l.display}</option>)}
-                    </select>
-                  )}
-                />
-                <input {...register(`emails.${idx}.value`)} className={`${inputClass} flex-1`} placeholder="taro@example.com" type="email" />
-                <button type="button" onClick={() => removeEmail(idx)} className="p-2 text-ink-placeholder hover:text-status-danger transition-colors flex-shrink-0">
-                  <FontAwesomeIcon icon={faTrash} className="text-xs" />
+            <section className="border-t border-surface-border dark:border-dark-border pt-5">
+              <h3 className="text-xs font-semibold text-ink-placeholder uppercase tracking-wider mb-3">メールアドレス</h3>
+              <div className="space-y-2">
+                {emailFields.map((field, idx) => (
+                  <div key={field.id} className="flex gap-2 items-center">
+                    <Controller
+                      control={control}
+                      name={`emails.${idx}.label`}
+                      render={({ field: f }) => (
+                        <select {...f} className={selectClass}>
+                          {EMAIL_LABELS.map(l => <option key={l.value} value={l.value}>{l.display}</option>)}
+                        </select>
+                      )}
+                    />
+                    <input {...register(`emails.${idx}.value`)} className={`${inputClass} flex-1`} placeholder="taro@example.com" type="email" />
+                    <button type="button" onClick={() => removeEmail(idx)} className="p-2 text-ink-placeholder hover:text-status-danger transition-colors flex-shrink-0">
+                      <FontAwesomeIcon icon={faTrash} className="text-xs" />
+                    </button>
+                  </div>
+                ))}
+                <button type="button" onClick={() => appendEmail({ id: crypto.randomUUID(), label: 'work', labelDisplay: '会社', value: '' })} className="flex items-center gap-1.5 text-xs text-primary-500 hover:text-primary-700 transition-colors">
+                  <FontAwesomeIcon icon={faPlus} className="text-xs" />メールを追加
                 </button>
               </div>
-            ))}
-            <button type="button" onClick={() => appendEmail({ id: crypto.randomUUID(), label: 'work', labelDisplay: '会社', value: '' })} className="flex items-center gap-1.5 text-xs text-primary-500 hover:text-primary-700 transition-colors">
-              <FontAwesomeIcon icon={faPlus} className="text-xs" />メールを追加
-            </button>
-          </div>
-        </section>
+            </section>
 
-        {/* URLs */}
-        <section className={sectionClass}>
-          <h3 className="text-xs font-semibold text-ink-placeholder uppercase tracking-wider mb-3">Web / URL</h3>
-          <div className="space-y-2">
-            {urlFields.map((field, idx) => (
-              <div key={field.id} className="flex gap-2 items-center">
-                <Controller
-                  control={control}
-                  name={`urls.${idx}.label`}
-                  render={({ field: f }) => (
-                    <select {...f} className={selectClass}>
-                      {URL_LABELS.map(l => <option key={l.value} value={l.value}>{l.display}</option>)}
-                    </select>
-                  )}
-                />
-                <input {...register(`urls.${idx}.value`)} className={`${inputClass} flex-1`} placeholder="https://example.com" type="url" />
-                <button type="button" onClick={() => removeUrl(idx)} className="p-2 text-ink-placeholder hover:text-status-danger transition-colors flex-shrink-0">
-                  <FontAwesomeIcon icon={faTrash} className="text-xs" />
+            <section className="border-t border-surface-border dark:border-dark-border pt-5">
+              <h3 className="text-xs font-semibold text-ink-placeholder uppercase tracking-wider mb-3">Web / URL</h3>
+              <div className="space-y-2">
+                {urlFields.map((field, idx) => (
+                  <div key={field.id} className="flex gap-2 items-center">
+                    <Controller
+                      control={control}
+                      name={`urls.${idx}.label`}
+                      render={({ field: f }) => (
+                        <select {...f} className={selectClass}>
+                          {URL_LABELS.map(l => <option key={l.value} value={l.value}>{l.display}</option>)}
+                        </select>
+                      )}
+                    />
+                    <input {...register(`urls.${idx}.value`)} className={`${inputClass} flex-1`} placeholder="https://example.com" type="url" />
+                    <button type="button" onClick={() => removeUrl(idx)} className="p-2 text-ink-placeholder hover:text-status-danger transition-colors flex-shrink-0">
+                      <FontAwesomeIcon icon={faTrash} className="text-xs" />
+                    </button>
+                  </div>
+                ))}
+                <button type="button" onClick={() => appendUrl({ id: crypto.randomUUID(), label: 'work', labelDisplay: '会社', value: '' })} className="flex items-center gap-1.5 text-xs text-primary-500 hover:text-primary-700 transition-colors">
+                  <FontAwesomeIcon icon={faPlus} className="text-xs" />URLを追加
                 </button>
               </div>
-            ))}
-            <button type="button" onClick={() => appendUrl({ id: crypto.randomUUID(), label: 'work', labelDisplay: '会社', value: '' })} className="flex items-center gap-1.5 text-xs text-primary-500 hover:text-primary-700 transition-colors">
-              <FontAwesomeIcon icon={faPlus} className="text-xs" />URLを追加
-            </button>
+            </section>
           </div>
-        </section>
+        )}
 
-        {/* Addresses */}
-        <section className={sectionClass}>
-          <h3 className="text-xs font-semibold text-ink-placeholder uppercase tracking-wider mb-3">住所</h3>
+        {/* 住所 */}
+        {activeTab === 'address' && (
           <div className="space-y-3">
             {addressFields.map((field, idx) => (
               <div key={field.id} className="border border-surface-border dark:border-dark-border rounded-lg p-3 space-y-2">
@@ -341,11 +382,10 @@ export function ContactForm({ contact, onSave }: ContactFormProps) {
               <FontAwesomeIcon icon={faPlus} className="text-xs" />住所を追加
             </button>
           </div>
-        </section>
+        )}
 
-        {/* Other */}
-        <section>
-          <h3 className="text-xs font-semibold text-ink-placeholder uppercase tracking-wider mb-3">その他</h3>
+        {/* その他 */}
+        {activeTab === 'other' && (
           <div className="space-y-3">
             <div>
               <label className={labelClass}>誕生日</label>
@@ -353,13 +393,13 @@ export function ContactForm({ contact, onSave }: ContactFormProps) {
             </div>
             <div>
               <label className={labelClass}>メモ</label>
-              <textarea {...register('notes')} className={`${inputClass} resize-none`} rows={3} placeholder="メモを入力..." />
+              <textarea {...register('notes')} className={`${inputClass} resize-none`} rows={6} placeholder="メモを入力..." />
             </div>
           </div>
-        </section>
+        )}
       </div>
 
-      {/* Footer */}
+      {/* Footer (fixed, always visible regardless of active tab) */}
       <div className="flex-shrink-0 flex gap-2 px-5 py-4 border-t border-surface-border dark:border-dark-border bg-surface-base/80 dark:bg-dark-base/80">
         <button type="button" onClick={() => navigate(-1)} className="flex items-center gap-2 px-4 py-2 text-sm border border-surface-border dark:border-dark-border rounded-lg text-ink-secondary hover:text-ink-primary transition-colors">
           <FontAwesomeIcon icon={faXmark} className="text-xs" />キャンセル
