@@ -40,7 +40,7 @@ export class NumVCFDatabase extends Dexie {
     super('NumVCF');
 
     this.version(1).stores({
-      contacts: 'id, uid, [name.formatted], [name.family], organization, &uid, *meta.groups, *meta.tags, meta.isFavorite, meta.isPinned, meta.createdAt, meta.updatedAt',
+      contacts: 'id, [name.formatted], [name.family], organization, &uid, *meta.groups, *meta.tags, meta.isFavorite, meta.isPinned, meta.createdAt, meta.updatedAt',
       formatProfiles: 'id, version, isBuiltin, enabled',
       groups: 'id, name, isSmartGroup',
       importLogs: 'id, importedAt, formatProfileId',
