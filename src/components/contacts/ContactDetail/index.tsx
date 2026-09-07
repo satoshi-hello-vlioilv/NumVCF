@@ -3,13 +3,14 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faPhone, faEnvelope, faGlobe, faLocationDot, faBuilding,
   faPencil, faTrash, faStar as faStarSolid, faThumbTack,
-  faCopy, faMessage, faEllipsisVertical, faChevronDown, faChevronUp,
-  faCalendar, faNoteSticky, faTag, faFileCode,
+  faCopy, faMessage, faCalendar, faNoteSticky, faTag, faFileCode,
+  faEllipsisVertical,
 } from '@fortawesome/free-solid-svg-icons';
 import { faStar as faStarRegular } from '@fortawesome/free-regular-svg-icons';
 import { Avatar } from '../../ui/Avatar';
 import { Badge } from '../../ui/Badge';
 import { ConfirmDialog } from '../../ui/ConfirmDialog';
+import { AccordionItem } from '../../ui/Accordion';
 import { useContactStore } from '../../../store/contactStore';
 import { useUIStore } from '../../../store/uiStore';
 import type { Contact, LabeledValue, ContactAddress } from '../../../types/contact';
@@ -91,7 +92,6 @@ export function ContactDetail({ contact }: ContactDetailProps) {
   const { addToast, setDetailPanelOpen } = useUIStore();
   const navigate = useNavigate();
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
-  const [showMeta, setShowMeta] = useState(false);
 
   const handleDelete = async () => {
     await deleteContact(contact.id);
@@ -101,8 +101,8 @@ export function ContactDetail({ contact }: ContactDetailProps) {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      {/* Header */}
-      <div className="px-5 pt-5 pb-4 border-b border-surface-border dark:border-dark-border bg-gradient-to-b from-primary-50/50 to-transparent dark:from-primary-900/10">
+      {/* Header (fixed, no scroll) */}
+      <div className="px-5 pt-5 pb-4 border-b border-surface-border dark:border-dark-border bg-gradient-to-b from-primary-50/50 to-transparent dark:from-primary-900/10 flex-shrink-0">
         <div className="flex items-start justify-between mb-3">
           <div className="flex items-center gap-3">
             <Avatar
@@ -148,130 +148,97 @@ export function ContactDetail({ contact }: ContactDetailProps) {
         </div>
       </div>
 
-      {/* Scrollable content */}
-      <div className="flex-1 overflow-y-auto px-5 py-3 space-y-1">
-        {/* Phones */}
+      {/* Accordion content — only the accordion body scrolls, sections stay
+          collapsed by default so the panel doesn't require scrolling for a
+          typical contact with a handful of fields. */}
+      <div className="flex-1 overflow-y-auto px-5">
         {contact.phones.length > 0 && (
-          <section>
-            <h3 className="text-2xs font-semibold text-ink-placeholder uppercase tracking-wider mb-1">電話番号</h3>
+          <AccordionItem title="電話番号" icon={faPhone} badge={contact.phones.length} defaultOpen>
             <div className="divide-y divide-surface-border/50 dark:divide-dark-border/50">
               {contact.phones.map(p => <PhoneRow key={p.id} phone={p} addToast={addToast} />)}
             </div>
-          </section>
+          </AccordionItem>
         )}
 
-        {/* Emails */}
         {contact.emails.length > 0 && (
-          <section className="pt-3">
-            <h3 className="text-2xs font-semibold text-ink-placeholder uppercase tracking-wider mb-1">メールアドレス</h3>
+          <AccordionItem title="メールアドレス" icon={faEnvelope} badge={contact.emails.length} defaultOpen>
             <div className="divide-y divide-surface-border/50 dark:divide-dark-border/50">
               {contact.emails.map(e => <EmailRow key={e.id} email={e} addToast={addToast} />)}
             </div>
-          </section>
+          </AccordionItem>
         )}
 
-        {/* Addresses */}
         {contact.addresses.length > 0 && (
-          <section className="pt-3">
-            <h3 className="text-2xs font-semibold text-ink-placeholder uppercase tracking-wider mb-1">住所</h3>
+          <AccordionItem title="住所" icon={faLocationDot} badge={contact.addresses.length}>
             <div className="divide-y divide-surface-border/50 dark:divide-dark-border/50">
               {contact.addresses.map(a => <AddressRow key={a.id} addr={a} />)}
             </div>
-          </section>
+          </AccordionItem>
         )}
 
-        {/* URLs */}
         {contact.urls.length > 0 && (
-          <section className="pt-3">
-            <h3 className="text-2xs font-semibold text-ink-placeholder uppercase tracking-wider mb-1">Web / URL</h3>
+          <AccordionItem title="Web / URL" icon={faGlobe} badge={contact.urls.length}>
             {contact.urls.map(u => (
               <div key={u.id} className="flex items-center gap-3 py-2">
                 <div className="w-6 flex justify-center"><FontAwesomeIcon icon={faGlobe} className="text-primary-300 text-sm" /></div>
                 <a href={u.value} target="_blank" rel="noopener noreferrer" className="text-sm text-primary-600 hover:underline truncate flex-1">{u.value}</a>
               </div>
             ))}
-          </section>
+          </AccordionItem>
         )}
 
-        {/* Tags */}
         {contact.meta.tags.length > 0 && (
-          <section className="pt-3">
-            <h3 className="text-2xs font-semibold text-ink-placeholder uppercase tracking-wider mb-2">
-              <FontAwesomeIcon icon={faTag} className="mr-1" />タグ
-            </h3>
-            <div className="flex flex-wrap gap-1">
+          <AccordionItem title="タグ" icon={faTag} badge={contact.meta.tags.length}>
+            <div className="flex flex-wrap gap-1 pt-1">
               {contact.meta.tags.map(tag => (
                 <span key={tag} className="px-2 py-0.5 bg-primary-100 text-primary-700 rounded-full text-xs">{tag}</span>
               ))}
             </div>
-          </section>
+          </AccordionItem>
         )}
 
-        {/* Notes */}
         {contact.meta.notes && (
-          <section className="pt-3">
-            <h3 className="text-2xs font-semibold text-ink-placeholder uppercase tracking-wider mb-1">
-              <FontAwesomeIcon icon={faNoteSticky} className="mr-1" />メモ
-            </h3>
+          <AccordionItem title="メモ" icon={faNoteSticky}>
             <p className="text-sm text-ink-primary whitespace-pre-wrap">{contact.meta.notes}</p>
-          </section>
+          </AccordionItem>
         )}
 
-        {/* Birthday */}
         {contact.birthday && (
-          <section className="pt-3">
-            <h3 className="text-2xs font-semibold text-ink-placeholder uppercase tracking-wider mb-1">
-              <FontAwesomeIcon icon={faCalendar} className="mr-1" />誕生日
-            </h3>
+          <AccordionItem title="誕生日" icon={faCalendar}>
             <p className="text-sm text-ink-primary">{contact.birthday}</p>
-          </section>
+          </AccordionItem>
         )}
 
-        {/* Custom fields */}
         {contact.customFields.length > 0 && (
-          <section className="pt-3">
-            <h3 className="text-2xs font-semibold text-ink-placeholder uppercase tracking-wider mb-1">
-              <FontAwesomeIcon icon={faEllipsisVertical} className="mr-1" />拡張フィールド
-            </h3>
+          <AccordionItem title="拡張フィールド" icon={faEllipsisVertical} badge={contact.customFields.length}>
             <div className="space-y-1">
               {contact.customFields.map(f => (
                 <div key={f.id} className="flex gap-2 text-xs">
                   <span className="text-ink-placeholder font-mono w-32 flex-shrink-0 truncate">{f.key}</span>
-                  <span className="text-ink-secondary">{f.value}</span>
+                  <span className="text-ink-secondary break-all">{f.value}</span>
                 </div>
               ))}
             </div>
-          </section>
+          </AccordionItem>
         )}
 
-        {/* Meta */}
-        <section className="pt-3">
-          <button
-            onClick={() => setShowMeta(v => !v)}
-            className="flex items-center gap-1.5 text-2xs text-ink-placeholder hover:text-ink-secondary transition-colors"
-          >
-            <FontAwesomeIcon icon={faFileCode} className="text-xs" />
-            VCF メタ情報
-            <FontAwesomeIcon icon={showMeta ? faChevronUp : faChevronDown} className="text-2xs" />
-          </button>
-          {showMeta && (
-            <div className="mt-2 space-y-1 pl-4 border-l-2 border-surface-border dark:border-dark-border">
-              {[
-                ['フォーマット', contact.meta.formatProfileId],
-                ['UID', contact.uid],
-                ['REV', contact.rev],
-                ['インポート元', contact.meta.importedFrom],
-                ['作成日時', contact.meta.createdAt],
-                ['更新日時', contact.meta.updatedAt],
-              ].map(([label, val]) => val ? (
-                <div key={label} className="flex gap-2 text-xs">
-                  <span className="text-ink-placeholder w-28 flex-shrink-0">{label}</span>
-                  <span className="text-ink-secondary font-mono">{val}</span>
-                </div>
-              ) : null)}
-            </div>
-          )}
-        </section>
+        <AccordionItem title="VCF メタ情報" icon={faFileCode}>
+          <div className="space-y-1">
+            {[
+              ['フォーマット', contact.meta.formatProfileId],
+              ['UID', contact.uid],
+              ['REV', contact.rev],
+              ['インポート元', contact.meta.importedFrom],
+              ['作成日時', contact.meta.createdAt],
+              ['更新日時', contact.meta.updatedAt],
+            ].map(([label, val]) => val ? (
+              <div key={label} className="flex gap-2 text-xs">
+                <span className="text-ink-placeholder w-28 flex-shrink-0">{label}</span>
+                <span className="text-ink-secondary font-mono break-all">{val}</span>
+              </div>
+            ) : null)}
+          </div>
+        </AccordionItem>
       </div>
 
       <ConfirmDialog

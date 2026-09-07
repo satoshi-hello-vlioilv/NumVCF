@@ -66,6 +66,35 @@ function resolveUrlLabel(params: Record<string, string[]>): { label: string; lab
   return { label: 'other', labelDisplay: 'その他' };
 }
 
+const PHOTO_MIME: Record<string, string> = {
+  JPEG: 'image/jpeg', JPG: 'image/jpeg', PNG: 'image/png', GIF: 'image/gif', BMP: 'image/bmp',
+};
+
+// vCard 2.1/3.0 embed the photo as raw base64 (with a TYPE=JPEG-style param),
+// while 4.0 (and some CardDAV exports) uses VALUE=uri to reference an
+// external/data URL directly. Normalize both into a src the <img> tag can
+// use as-is.
+function normalizePhotoValue(prop: { value: string; params: Record<string, string[]> }): string {
+  const value = prop.value.trim();
+  const isUri = prop.params['VALUE']?.[0]?.toUpperCase() === 'URI'
+    || /^(https?:|data:)/i.test(value);
+  if (isUri) return value;
+  const typeParam = prop.params['TYPE']?.[0]?.toUpperCase() || 'JPEG';
+  const mime = PHOTO_MIME[typeParam] || 'image/jpeg';
+  return `data:${mime};base64,${value.replace(/\s+/g, '')}`;
+}
+
+// vCard dates appear as YYYYMMDD (2.1/3.0), YYYY-MM-DD (4.0), or with a time
+// component (YYYYMMDDTHHMMSSZ). Normalize to YYYY-MM-DD so <input type="date">
+// can round-trip the value instead of silently discarding it on edit.
+function normalizeVCardDate(value: string): string {
+  const datePart = value.trim().split('T')[0];
+  if (/^\d{8}$/.test(datePart)) {
+    return `${datePart.slice(0, 4)}-${datePart.slice(4, 6)}-${datePart.slice(6, 8)}`;
+  }
+  return datePart;
+}
+
 function vcardToContact(vcard: ParsedVCard, profileId: string, filename: string): Contact {
   const now = new Date().toISOString();
   const contact: Contact = {
@@ -99,15 +128,26 @@ function vcardToContact(vcard: ParsedVCard, profileId: string, filename: string)
     'X-KANA', 'PRODID', 'KIND', 'MEMBER',
   ]);
 
+  let fnSet = false;
+
   for (const prop of vcard.properties) {
     switch (prop.name) {
       case 'FN':
-        contact.name.formatted = prop.value;
+        if (prop.value.trim()) {
+          contact.name.formatted = prop.value;
+          fnSet = true;
+        }
         break;
       case 'N': {
+        // FN is the authoritative display name per RFC 6350 §6.2.1 — N only
+        // supplies structured name parts. Regardless of property order in
+        // the source file, an explicit FN must not be clobbered by N's
+        // derived "family given" formatting.
         const parsed = parseNameField(prop.value);
+        const preservedFormatted = contact.name.formatted;
         contact.name = { ...contact.name, ...parsed };
-        if (!contact.name.formatted || contact.name.formatted === '(名前なし)') {
+        if (fnSet) contact.name.formatted = preservedFormatted;
+        if (!fnSet) {
           contact.name.formatted = parsed.formatted;
         }
         break;
@@ -128,10 +168,10 @@ function vcardToContact(vcard: ParsedVCard, profileId: string, filename: string)
         contact.nickname = prop.value;
         break;
       case 'BDAY':
-        contact.birthday = prop.value;
+        contact.birthday = normalizeVCardDate(prop.value);
         break;
       case 'ANNIVERSARY':
-        contact.anniversary = prop.value;
+        contact.anniversary = normalizeVCardDate(prop.value);
         break;
       case 'NOTE':
         contact.meta.notes = prop.value;
@@ -143,7 +183,7 @@ function vcardToContact(vcard: ParsedVCard, profileId: string, filename: string)
         contact.rev = prop.value;
         break;
       case 'PHOTO':
-        contact.photo = prop.value;
+        if (prop.value.trim()) contact.photo = normalizePhotoValue(prop);
         break;
       case 'GENDER':
         contact.gender = prop.value.charAt(0).toUpperCase() as Contact['gender'];
@@ -167,6 +207,8 @@ function vcardToContact(vcard: ParsedVCard, profileId: string, filename: string)
       case 'TEL': {
         const { label, labelDisplay } = resolvePhoneLabel(prop.params);
         let phone = prop.value.trim();
+        // vCard 4.0 URI form: "tel:+81-90-1234-5678;ext=123"
+        phone = phone.replace(/^tel:/i, '').split(';')[0];
         phone = fullwidthToHalfwidth(phone);
         phone = normalizePhoneNumber(phone);
         if (phone) {
@@ -191,7 +233,10 @@ function vcardToContact(vcard: ParsedVCard, profileId: string, filename: string)
       case 'ADR': {
         const { label, labelDisplay } = resolveAddressLabel(prop.params);
         const addr = parseAddressField(prop.value);
-        contact.addresses.push({ id: generateId(), label, labelDisplay, value: addr });
+        const hasContent = Object.entries(addr).some(([key, v]) => key !== 'formatted' && v);
+        if (hasContent) {
+          contact.addresses.push({ id: generateId(), label, labelDisplay, value: addr });
+        }
         break;
       }
       case 'CATEGORIES':
