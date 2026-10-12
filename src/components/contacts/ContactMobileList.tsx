@@ -1,5 +1,5 @@
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faStar, faThumbTack, faBuilding } from '@fortawesome/free-solid-svg-icons';
+import { faStar, faThumbTack, faBuilding, faPhone, faCircleCheck } from '@fortawesome/free-solid-svg-icons';
 import { Avatar } from '../ui/Avatar';
 import { useContactStore } from '../../store/contactStore';
 import { useUIStore } from '../../store/uiStore';
@@ -24,10 +24,18 @@ function GroupHeader({ label, count, mode, overlay }: { label: string; count: nu
   );
 }
 
-export function ContactMobileList({ virtual, mode }: { virtual: VirtualRowsModel; mode: GroupMode }) {
+interface ContactMobileListProps {
+  virtual: VirtualRowsModel;
+  mode: GroupMode;
+  // Full-width list: the number becomes a call button. Next to an open
+  // detail the list is narrow and the detail already has the call actions.
+  callButton?: boolean;
+}
+
+export function ContactMobileList({ virtual, mode, callButton }: ContactMobileListProps) {
   const { selectedId, setSelectedId } = useContactStore();
-  const { density, selectedIds, toggleSelectId } = useUIStore();
-  const multi = selectedIds.size > 0;
+  const { density, selectedIds, isSelecting, toggleSelectId } = useUIStore();
+  const multi = isSelecting || selectedIds.size > 0;
   const current = virtual.currentGroup;
 
   return (
@@ -51,19 +59,32 @@ export function ContactMobileList({ virtual, mode }: { virtual: VirtualRowsModel
         const phone = c.phones.find(p => !p.label.includes('fax'))?.value;
         const checked = selectedIds.has(c.id);
         return (
-          <button
+          <div
             key={item.key}
             data-index={item.index}
             ref={virtual.measure}
-            type="button"
+            role="button"
+            tabIndex={0}
+            aria-pressed={multi ? checked : undefined}
             onClick={() => (multi ? toggleSelectId(c.id) : setSelectedId(c.id))}
+            onKeyDown={e => {
+              if (e.key !== 'Enter' && e.key !== ' ') return;
+              e.preventDefault();
+              if (multi) toggleSelectId(c.id); else setSelectedId(c.id);
+            }}
             onContextMenu={e => { e.preventDefault(); toggleSelectId(c.id); }}
-            className={`w-full flex items-center gap-3 px-4 ${ROW_PAD[density]} text-left border-b border-surface-border/40 dark:border-dark-border/40 ${
+            className={`w-full flex items-center gap-3 px-4 ${ROW_PAD[density]} text-left cursor-pointer border-b border-surface-border/40 dark:border-dark-border/40 ${
               checked || selectedId === c.id ? 'bg-primary-50 dark:bg-primary-900/30' : 'active:bg-surface-base'
             }`}
           >
             {multi
-              ? <input type="checkbox" checked={checked} readOnly tabIndex={-1} aria-label={`${c.name.formatted} を選択`} className="w-5 h-5 mx-2.5 rounded text-primary-500" />
+              ? (
+                <span className="w-9 h-9 flex items-center justify-center flex-shrink-0" aria-hidden>
+                  {checked
+                    ? <FontAwesomeIcon icon={faCircleCheck} className="text-[22px] text-primary-500" />
+                    : <span className="w-[22px] h-[22px] rounded-full border-2 border-ink-placeholder/50" />}
+                </span>
+              )
               : <Avatar name={c.name.formatted} family={c.name.family} given={c.name.given} photo={c.photo} size="md" />}
             <span className="flex-1 min-w-0">
               <span className="flex items-center gap-1.5">
@@ -73,10 +94,20 @@ export function ContactMobileList({ virtual, mode }: { virtual: VirtualRowsModel
               </span>
               <span className="flex items-center gap-2 text-xs min-w-0">
                 <span className="truncate text-ink-secondary">{subline(c, mode)}</span>
-                {phone && <span className="ml-auto font-mono text-ink-placeholder flex-shrink-0">{phone}</span>}
+                {phone && !callButton && <span className="ml-auto font-mono text-ink-placeholder flex-shrink-0">{phone}</span>}
               </span>
             </span>
-          </button>
+            {phone && callButton && !multi && (
+              <a
+                href={`tel:${phone}`}
+                onClick={e => e.stopPropagation()}
+                aria-label={`${phone} に発信`}
+                className="flex-shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-200 text-xs font-mono active:bg-primary-100"
+              >
+                <FontAwesomeIcon icon={faPhone} className="text-2xs" />{phone}
+              </a>
+            )}
+          </div>
         );
       })}
       {virtual.paddingBottom > 0 && <div aria-hidden style={{ height: virtual.paddingBottom }} />}

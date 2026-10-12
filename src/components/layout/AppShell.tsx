@@ -3,8 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faAddressBook, faFileImport, faPlus, faMagnifyingGlass } from '@fortawesome/free-solid-svg-icons';
 import { TopBar } from './TopBar';
-import { ListToolbar } from './ListToolbar';
+import { ListToolbar, SelectionBar } from './ListToolbar';
 import { ContactTable } from '../contacts/ContactTable';
+import { WIDE_TABLE_MIN } from '../contacts/tableLayout';
 import { ContactMobileList } from '../contacts/ContactMobileList';
 import { ContactDetail } from '../contacts/ContactDetail';
 import { AlphabetIndex } from '../contacts/AlphabetIndex';
@@ -18,9 +19,11 @@ import { useUIStore } from '../../store/uiStore';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { groupContacts } from '../../utils/grouping';
 import { useVirtualRows } from '../../hooks/useVirtualRows';
+import { useWidthOf } from '../../hooks/useElementWidth';
 import type { DisplayDensity } from '../../types/contact';
 
 const TABLE_ROW_H: Record<DisplayDensity, number> = { compact: 41, comfortable: 45, spacious: 57 };
+const TWO_LINE_TABLE_ROW_H: Record<DisplayDensity, number> = { compact: 49, comfortable: 53, spacious: 65 };
 const LIST_ROW_H: Record<DisplayDensity, number> = { compact: 53, comfortable: 57, spacious: 69 };
 
 const NON_TEXT_INPUTS = new Set(['checkbox', 'radio', 'button', 'submit', 'reset', 'range', 'color', 'file']);
@@ -37,20 +40,21 @@ export function AppShell() {
   const { contacts, isLoaded, selectedId, setSelectedId, sortField, sortOrder, searchQuery, filter, deleteContacts } = useContactStore();
   const {
     groupMode, density, isImportModalOpen, setImportModalOpen, isExportModalOpen, setExportModalOpen,
-    selectedIds, clearSelection, addToast,
+    selectedIds, isSelecting, clearSelection, addToast,
   } = useUIStore();
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
 
   const visible = useMemo(() => filterContacts(contacts, searchQuery, filter, sortField, sortOrder), [contacts, searchQuery, filter, sortField, sortOrder]);
   const groups = useMemo(() => groupContacts(visible, groupMode, sortField), [visible, groupMode, sortField]);
   const ordered = useMemo(() => groups.flatMap(g => g.contacts), [groups]);
+  const visibleIds = useMemo(() => ordered.map(c => c.id), [ordered]);
   const selected = contacts.find(c => c.id === selectedId) ?? null;
   const showIndex = groupMode === 'kana' && groups.length > 1;
 
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === 'Escape') {
-      if (selectedIds.size > 0) clearSelection();
+      if (selectedIds.size > 0 || isSelecting) clearSelection();
       else setSelectedId(null);
       return;
     }
@@ -67,7 +71,7 @@ export function AppShell() {
       const next = e.key === 'ArrowDown' ? Math.min(idx + 1, ordered.length - 1) : Math.max(idx - 1, 0);
       setSelectedId(ordered[idx === -1 ? 0 : next].id);
     }
-  }, [selectedIds, clearSelection, setSelectedId, navigate, setImportModalOpen, setExportModalOpen, selectedId, ordered]);
+  }, [selectedIds, isSelecting, clearSelection, setSelectedId, navigate, setImportModalOpen, setExportModalOpen, selectedId, ordered]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
@@ -87,9 +91,13 @@ export function AppShell() {
   // detail takes the whole width and the list returns when it is closed.
   const listHiddenOnMobile = detailOpen && !isLg;
   const asTable = isMd && !detailOpen;
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
+  const setScrollRef = useCallback((el: HTMLDivElement | null) => { scrollRef.current = el; setScrollEl(el); }, []);
+  const listWidth = useWidthOf(scrollEl);
+  const twoLineTable = listWidth < WIDE_TABLE_MIN;
   const virtual = useVirtualRows(groups, scrollRef, {
-    rowHeight: asTable ? TABLE_ROW_H[density] : LIST_ROW_H[density],
+    rowHeight: asTable ? (twoLineTable ? TWO_LINE_TABLE_ROW_H : TABLE_ROW_H)[density] : LIST_ROW_H[density],
     headerHeight: asTable ? 27 : 26,
     scrollPaddingStart: asTable ? 33 : 26,
   });
@@ -124,8 +132,8 @@ export function AppShell() {
     // With a contact open, the list narrows to two-line rows (name / org +
     // phone) instead of a cramped table, so no column ever gets cut off.
     listBody = asTable
-      ? <ContactTable virtual={virtual} mode={groupMode} />
-      : <ContactMobileList virtual={virtual} mode={groupMode} />;
+      ? <ContactTable virtual={virtual} mode={groupMode} width={listWidth} />
+      : <ContactMobileList virtual={virtual} mode={groupMode} callButton={!detailOpen} />;
   }
 
   return (
@@ -139,11 +147,12 @@ export function AppShell() {
               aria-label="連絡先一覧"
               className={`${detailOpen ? 'w-80 xl:w-96 flex-shrink-0' : 'flex-1'} min-w-0 flex flex-col bg-white dark:bg-dark-card border-r border-surface-border dark:border-dark-border`}
             >
-              {contacts.length > 0 && <ListToolbar count={visible.length} visibleIds={ordered.map(c => c.id)} onBulkDelete={() => setConfirmBulkDelete(true)} />}
+              {contacts.length > 0 && <ListToolbar count={visible.length} total={contacts.length} visibleIds={visibleIds} onBulkDelete={() => setConfirmBulkDelete(true)} compact={!asTable} />}
               <div className="flex-1 min-h-0 flex">
-                <div ref={scrollRef} className="flex-1 min-w-0 overflow-auto">{listBody}</div>
+                <div ref={setScrollRef} className="flex-1 min-w-0 overflow-auto">{listBody}</div>
                 {showIndex && visible.length > 0 && <AlphabetIndex availableKeys={new Set(groups.map(g => g.key))} onSelect={virtual.scrollToGroup} />}
               </div>
+              {!asTable && (isSelecting || selectedIds.size > 0) && <SelectionBar visibleIds={visibleIds} onBulkDelete={() => setConfirmBulkDelete(true)} />}
             </section>
           )}
 

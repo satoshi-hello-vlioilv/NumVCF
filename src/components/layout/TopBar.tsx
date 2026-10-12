@@ -93,8 +93,9 @@ export function TopBar() {
           )}
         </Popover>
       </div>
-      <div className="flex gap-1.5 overflow-x-auto px-3 lg:px-4 pb-2 [scrollbar-width:none]">
-        <Chip active={filter === 'all'} onClick={() => setFilter('all')}>すべて <span className="opacity-70">{contacts.length}</span></Chip>
+      {/* On narrow screens the chips scroll sideways; the fading edge shows there is more. */}
+      <div className="flex gap-1.5 overflow-x-auto px-3 lg:px-4 pb-2 pr-8 lg:pr-4 [scrollbar-width:none] [mask-image:linear-gradient(to_right,black_calc(100%-2rem),transparent)] lg:[mask-image:none]">
+        <Chip active={filter === 'all'} onClick={() => setFilter('all')}>すべて</Chip>
         <Chip active={filter === 'fav'} onClick={() => setFilter('fav')}><FontAwesomeIcon icon={faStar} className="text-2xs" />お気に入り</Chip>
         <Chip active={filter === 'pin'} onClick={() => setFilter('pin')}><FontAwesomeIcon icon={faThumbTack} className="text-2xs" />ピン留め</Chip>
         <Chip active={tagActive} onClick={() => setPicker('tag')}>
