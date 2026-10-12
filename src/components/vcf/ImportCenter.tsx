@@ -98,8 +98,15 @@ export function ImportCenter() {
             }`}
           >
             <FontAwesomeIcon icon={faCloudArrowUp} className="text-4xl text-ink-placeholder mb-3" />
-            <p className="text-sm font-medium text-ink-primary mb-1">VCF ファイルをドロップ</p>
-            <p className="text-xs text-ink-secondary">または クリックして選択</p>
+            {/* Touch screens cannot drop files, so they get tap wording. */}
+            <p className="text-sm font-medium text-ink-primary dark:text-slate-100 mb-1">
+              <span className="[@media(pointer:coarse)]:hidden">VCF ファイルをドロップ</span>
+              <span className="hidden [@media(pointer:coarse)]:inline">VCF ファイルを選択</span>
+            </p>
+            <p className="text-xs text-ink-secondary">
+              <span className="[@media(pointer:coarse)]:hidden">または クリックして選択</span>
+              <span className="hidden [@media(pointer:coarse)]:inline">タップしてファイルを選ぶ</span>
+            </p>
             <p className="text-xs text-ink-placeholder mt-3">vCard 2.1 / 3.0 / 4.0 対応（Docomo / au / SoftBank 等）</p>
             <input ref={fileRef} type="file" accept=".vcf,.vcard" onChange={handleFileChange} className="hidden" />
           </div>
