@@ -11,7 +11,7 @@ import { parseVCFBuffer } from '../../vcf/parser';
 import type { Contact } from '../../types/contact';
 import type { ImportResult } from '../../types/vcfFormat';
 
-type Step = 'drop' | 'parsing' | 'preview' | 'done';
+type Step = 'drop' | 'parsing' | 'preview' | 'saving' | 'done';
 
 export function ImportCenter() {
   const [step, setStep] = useState<Step>('drop');
@@ -19,6 +19,7 @@ export function ImportCenter() {
   const [result, setResult] = useState<ImportResult | null>(null);
   const [detectedProfile, setDetectedProfile] = useState<string | null>(null);
   const [pendingContacts, setPendingContacts] = useState<Contact[]>([]);
+  const [progress, setProgress] = useState({ done: 0, total: 0 });
   const fileRef = useRef<HTMLInputElement>(null);
 
   const { importContacts } = useContactStore();
@@ -56,9 +57,10 @@ export function ImportCenter() {
   };
 
   const handleImport = async () => {
-    setStep('parsing');
+    setStep('saving');
+    setProgress({ done: 0, total: pendingContacts.length });
     try {
-      const { added, skippedDuplicateUid } = await importContacts(pendingContacts);
+      const { added, skippedDuplicateUid } = await importContacts(pendingContacts, (done, total) => setProgress({ done, total }));
       setResult(prev => prev ? { ...prev, imported: added, skipped: skippedDuplicateUid } : prev);
       setStep('done');
       addToast({ type: 'success', message: `${added} 件の連絡先をインポートしました` });
@@ -104,9 +106,19 @@ export function ImportCenter() {
         )}
 
         {step === 'parsing' && (
-          <div className="flex flex-col items-center justify-center py-16 gap-3">
+          <div className="flex flex-col items-center justify-center py-16 gap-3" role="status">
             <FontAwesomeIcon icon={faSpinner} className="text-3xl text-primary-400 animate-spin" />
-            <p className="text-sm text-ink-secondary">解析中...</p>
+            <p className="text-sm text-ink-secondary">ファイルを解析しています…</p>
+          </div>
+        )}
+
+        {step === 'saving' && (
+          <div className="flex flex-col items-center justify-center py-16 gap-3" role="status" aria-live="polite">
+            <p className="text-sm text-ink-primary dark:text-slate-200">連絡先を登録しています…</p>
+            <div className="w-64 h-2 rounded-full bg-surface-card dark:bg-dark-surface overflow-hidden" role="progressbar" aria-valuemin={0} aria-valuemax={progress.total} aria-valuenow={progress.done}>
+              <div className="h-full bg-primary-500 transition-[width] duration-200" style={{ width: `${progress.total ? (progress.done / progress.total) * 100 : 0}%` }} />
+            </div>
+            <p className="text-xs text-ink-secondary tabular-nums">{progress.done.toLocaleString()} / {progress.total.toLocaleString()} 件</p>
           </div>
         )}
 
