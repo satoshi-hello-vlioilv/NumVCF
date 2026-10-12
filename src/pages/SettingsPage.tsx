@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faGear, faArrowLeft, faFileCode, faToggleOn, faToggleOff,
-  faPlus, faTrash,
+  faTrash, faDisplay,
 } from '@fortawesome/free-solid-svg-icons';
 import { useFormatProfileStore } from '../store/formatProfileStore';
 import { useUIStore } from '../store/uiStore';
@@ -10,7 +10,7 @@ import { useUIStore } from '../store/uiStore';
 export function SettingsPage() {
   const navigate = useNavigate();
   const { profiles, toggleEnabled, deleteProfile } = useFormatProfileStore();
-  const { addToast } = useUIStore();
+  const { addToast, isDarkMode, toggleDarkMode, density, setDensity, groupMode, setGroupMode } = useUIStore();
 
   const handleDelete = async (id: string) => {
     try {
@@ -24,7 +24,7 @@ export function SettingsPage() {
   return (
     <div className="h-screen flex flex-col bg-surface-base dark:bg-dark-base">
       <header className="flex items-center gap-3 px-4 py-3 bg-white dark:bg-dark-card border-b border-surface-border dark:border-dark-border">
-        <button onClick={() => navigate(-1)} className="p-1.5 text-ink-secondary hover:text-ink-primary transition-colors">
+        <button onClick={() => navigate('/')} aria-label="一覧に戻る" className="p-1.5 text-ink-secondary hover:text-ink-primary transition-colors">
           <FontAwesomeIcon icon={faArrowLeft} />
         </button>
         <FontAwesomeIcon icon={faGear} className="text-primary-400" />
@@ -32,6 +32,30 @@ export function SettingsPage() {
       </header>
 
       <div className="flex-1 overflow-y-auto p-6 max-w-3xl mx-auto w-full space-y-8">
+        <section>
+          <div className="flex items-center gap-2 mb-3">
+            <FontAwesomeIcon icon={faDisplay} className="text-primary-400" />
+            <h2 className="font-semibold text-ink-primary dark:text-slate-100">表示</h2>
+          </div>
+          <div className="bg-white dark:bg-dark-card rounded-xl border border-surface-border dark:border-dark-border divide-y divide-surface-border/60 dark:divide-dark-border/60 text-sm">
+            {([
+              ['テーマ', [['light', 'ライト'], ['dark', 'ダーク']], isDarkMode ? 'dark' : 'light', (v: string) => { if ((v === 'dark') !== isDarkMode) toggleDarkMode(); }],
+              ['一覧の表示密度', [['compact', 'コンパクト'], ['comfortable', '標準'], ['spacious', 'ゆったり']], density, (v: string) => setDensity(v as typeof density)],
+              ['一覧のグループ', [['kana', '五十音'], ['org', '組織別']], groupMode, (v: string) => setGroupMode(v as typeof groupMode)],
+            ] as const).map(([label, options, value, onChange]) => (
+              <div key={label} className="flex items-center justify-between gap-4 px-4 py-3">
+                <span className="text-ink-primary dark:text-slate-200">{label}</span>
+                <div className="flex bg-surface-base dark:bg-dark-surface rounded-lg p-0.5 text-xs" role="radiogroup" aria-label={label}>
+                  {options.map(([v, l]) => (
+                    <button key={v} type="button" role="radio" aria-checked={value === v} onClick={() => onChange(v)}
+                      className={`px-3 py-1 rounded-md ${value === v ? 'bg-white dark:bg-dark-card shadow-card font-medium text-ink-primary dark:text-slate-100' : 'text-ink-secondary'}`}>{l}</button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
         {/* VCF Format Master */}
         <section>
           <div className="flex items-center justify-between mb-3">
@@ -39,10 +63,6 @@ export function SettingsPage() {
               <FontAwesomeIcon icon={faFileCode} className="text-primary-400" />
               <h2 className="font-semibold text-ink-primary">VCF フォーマットマスター</h2>
             </div>
-            <button className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors">
-              <FontAwesomeIcon icon={faPlus} className="text-xs" />
-              新規追加
-            </button>
           </div>
 
           <div className="bg-white dark:bg-dark-card rounded-xl border border-surface-border dark:border-dark-border overflow-hidden">
@@ -62,7 +82,7 @@ export function SettingsPage() {
                   <tr key={profile.id} className="hover:bg-surface-card/50 dark:hover:bg-dark-card/50 transition-colors">
                     <td className="px-4 py-3">
                       <div className="font-medium text-ink-primary text-sm">{profile.name}</div>
-                      <div className="text-xs text-ink-placeholder truncate max-w-48">{profile.description}</div>
+                      <div className="text-xs text-ink-placeholder line-clamp-2">{profile.description}</div>
                     </td>
                     <td className="px-4 py-3 hidden sm:table-cell">
                       <span className="font-mono text-xs text-ink-secondary">{profile.version}</span>

@@ -11,7 +11,7 @@ export function ExportCenter() {
   const { profiles } = useFormatProfileStore();
   const { setExportModalOpen, selectedIds, addToast } = useUIStore();
   const [profileId, setProfileId] = useState('vcf-standard-30');
-  const [scope, setScope] = useState<'all' | 'selected' | 'filtered'>('all');
+  const [scope, setScope] = useState<'all' | 'selected' | 'filtered'>(() => (useUIStore.getState().selectedIds.size > 0 ? 'selected' : 'all'));
 
   const enabledProfiles = profiles.filter(p => p.enabled);
 

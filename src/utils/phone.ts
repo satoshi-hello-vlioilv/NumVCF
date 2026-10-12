@@ -1,11 +1,11 @@
 const FULLWIDTH_MAP: Record<string, string> = {
   '０': '0', '１': '1', '２': '2', '３': '3', '４': '4',
   '５': '5', '６': '6', '７': '7', '８': '8', '９': '9',
-  '－': '-', '（': '(', '）': ')', '＋': '+', '　': ' ',
+  '－': '-', '（': '(', '）': ')', '＋': '+', '\u3000': ' ',
 };
 
 export function fullwidthToHalfwidth(str: string): string {
-  return str.replace(/[０-９－（）＋　]/g, c => FULLWIDTH_MAP[c] || c);
+  return str.replace(/[０-９－（）＋\u3000]/g, c => FULLWIDTH_MAP[c] || c);
 }
 
 export function normalizePhoneNumber(phone: string): string {
