@@ -30,7 +30,6 @@ function parseAddressField(value: string): ContactAddress {
     region: parts[4]?.trim(),
     postalCode: parts[5]?.trim(),
     country: parts[6]?.trim(),
-    formatted: parts.filter(Boolean).join(', '),
   };
 }
 

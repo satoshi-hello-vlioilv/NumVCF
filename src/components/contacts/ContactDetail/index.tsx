@@ -16,8 +16,9 @@ import { Popover, PopoverItem, PopoverDivider } from '../../ui/Popover';
 import { useContactStore } from '../../../store/contactStore';
 import { useFormatProfileStore } from '../../../store/formatProfileStore';
 import { useUIStore } from '../../../store/uiStore';
-import type { Contact, ContactAddress } from '../../../types/contact';
+import type { Contact } from '../../../types/contact';
 import { relativeDate } from '../../../utils/date';
+import { formatAddress } from '../../../utils/address';
 import { useElementWidth } from '../../../hooks/useElementWidth';
 
 function copy(text: string, label: string) {
@@ -26,9 +27,6 @@ function copy(text: string, label: string) {
     .catch(() => useUIStore.getState().addToast({ type: 'error', message: 'コピーできませんでした' }));
 }
 
-function addressText(a: ContactAddress) {
-  return a.formatted || [a.postalCode && `〒${a.postalCode}`, a.region, a.city, a.street, a.extended, a.country].filter(Boolean).join(' ');
-}
 
 const COLLEAGUE_LIMIT = 8;
 
@@ -196,8 +194,8 @@ export function ContactDetail({ contact: c, onClose }: ContactDetailProps) {
           <div className={`space-y-4 min-w-0 ${twoColumns ? 'px-1' : 'px-2'}`}>
             {c.addresses.map(a => (
               <Block key={a.id} icon={faLocationDot} title={`住所（${a.labelDisplay ?? a.label}）`}>
-                <p className="break-words">{addressText(a.value)}
-                  <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addressText(a.value))}`} target="_blank" rel="noopener noreferrer" className="ml-2 text-xs text-primary-600 hover:underline whitespace-nowrap">
+                <p className="break-words">{formatAddress(a.value)}
+                  <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(formatAddress(a.value))}`} target="_blank" rel="noopener noreferrer" className="ml-2 text-xs text-primary-600 hover:underline whitespace-nowrap">
                     地図<FontAwesomeIcon icon={faUpRightFromSquare} className="ml-1 text-[9px]" />
                   </a>
                 </p>
