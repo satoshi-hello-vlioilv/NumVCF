@@ -3,24 +3,25 @@ import type { VCFFormatProfile, ParsedVCard, ImportResult, ImportError } from '.
 import { tokenizeVCF } from './tokenizer';
 import { detectFormat, detectEncoding } from './detector';
 import { fullwidthToHalfwidth, normalizePhoneNumber } from '../../utils/phone';
+import { splitStructured, unescapeText } from '../escape';
 
 function generateId(): string {
   return crypto.randomUUID();
 }
 
 function parseNameField(value: string): ContactName {
-  const parts = value.split(';');
+  const parts = splitStructured(value, ';');
   const family = parts[0]?.trim() || '';
   const given = parts[1]?.trim() || '';
   const additional = parts[2]?.trim();
   const prefix = parts[3]?.trim();
   const suffix = parts[4]?.trim();
-  const formatted = [family, given].filter(Boolean).join(' ') || value;
+  const formatted = [family, given].filter(Boolean).join(' ') || unescapeText(value);
   return { formatted, family, given, additional, prefix, suffix };
 }
 
 function parseAddressField(value: string): ContactAddress {
-  const parts = value.split(';');
+  const parts = splitStructured(value, ';');
   return {
     poBox: parts[0]?.trim(),
     extended: parts[1]?.trim(),
@@ -134,7 +135,7 @@ function vcardToContact(vcard: ParsedVCard, profileId: string, filename: string)
     switch (prop.name) {
       case 'FN':
         if (prop.value.trim()) {
-          contact.name.formatted = prop.value;
+          contact.name.formatted = unescapeText(prop.value);
           fnSet = true;
         }
         break;
@@ -153,19 +154,19 @@ function vcardToContact(vcard: ParsedVCard, profileId: string, filename: string)
         break;
       }
       case 'ORG': {
-        const orgParts = prop.value.split(';');
+        const orgParts = splitStructured(prop.value, ';');
         contact.organization = orgParts[0]?.trim();
         if (orgParts[1]) contact.department = orgParts[1].trim();
         break;
       }
       case 'TITLE':
-        contact.title = prop.value;
+        contact.title = unescapeText(prop.value);
         break;
       case 'ROLE':
-        contact.role = prop.value;
+        contact.role = unescapeText(prop.value);
         break;
       case 'NICKNAME':
-        contact.nickname = prop.value;
+        contact.nickname = unescapeText(prop.value);
         break;
       case 'BDAY':
         contact.birthday = normalizeVCardDate(prop.value);
@@ -174,7 +175,7 @@ function vcardToContact(vcard: ParsedVCard, profileId: string, filename: string)
         contact.anniversary = normalizeVCardDate(prop.value);
         break;
       case 'NOTE':
-        contact.meta.notes = prop.value;
+        contact.meta.notes = unescapeText(prop.value);
         break;
       case 'UID':
         contact.uid = prop.value;
@@ -190,19 +191,19 @@ function vcardToContact(vcard: ParsedVCard, profileId: string, filename: string)
         break;
       case 'SOUND':
         if (!contact.nameKana) contact.nameKana = { formatted: '' };
-        contact.nameKana.formatted = prop.value.replace(/^CHARSET=.*?:/, '');
+        contact.nameKana.formatted = unescapeText(prop.value.replace(/^CHARSET=.*?:/, ''));
         break;
       case 'X-PHONETIC-LAST-NAME':
         if (!contact.nameKana) contact.nameKana = { formatted: '' };
-        contact.nameKana.family = prop.value;
+        contact.nameKana.family = unescapeText(prop.value);
         if (!contact.nameKana.formatted) {
-          contact.nameKana.formatted = [prop.value, contact.nameKana.given].filter(Boolean).join(' ');
+          contact.nameKana.formatted = [contact.nameKana.family, contact.nameKana.given].filter(Boolean).join(' ');
         }
         break;
       case 'X-PHONETIC-FIRST-NAME':
         if (!contact.nameKana) contact.nameKana = { formatted: '' };
-        contact.nameKana.given = prop.value;
-        contact.nameKana.formatted = [contact.nameKana.family, prop.value].filter(Boolean).join(' ');
+        contact.nameKana.given = unescapeText(prop.value);
+        contact.nameKana.formatted = [contact.nameKana.family, contact.nameKana.given].filter(Boolean).join(' ');
         break;
       case 'TEL': {
         const { label, labelDisplay } = resolvePhoneLabel(prop.params);
@@ -240,7 +241,7 @@ function vcardToContact(vcard: ParsedVCard, profileId: string, filename: string)
         break;
       }
       case 'CATEGORIES':
-        contact.meta.tags = prop.value.split(',').map(t => t.trim()).filter(Boolean);
+        contact.meta.tags = splitStructured(prop.value, ',').map(t => t.trim()).filter(Boolean);
         break;
       case 'IMPP':
         if (prop.value.trim()) {
@@ -253,7 +254,7 @@ function vcardToContact(vcard: ParsedVCard, profileId: string, filename: string)
             id: generateId(),
             key: prop.name,
             label: prop.name,
-            value: prop.value,
+            value: unescapeText(prop.value),
             dataType: 'text',
             formatProfileId: profileId,
           });

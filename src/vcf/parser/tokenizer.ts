@@ -5,6 +5,24 @@ function unfoldLines(text: string): string {
   return text.replace(/\r?\n[ \t]/g, '');
 }
 
+// vCard 2.1 Quoted-Printable values wrap with a trailing "=" (soft line
+// break) instead of RFC folding, so the continuation lines must be joined
+// back before each line is parsed as a property.
+function joinQuotedPrintableSoftBreaks(lines: string[]): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    let line = lines[i];
+    const colon = line.indexOf(':');
+    if (colon > 0 && /ENCODING=QUOTED-PRINTABLE/i.test(line.slice(0, colon))) {
+      while (line.endsWith('=') && i + 1 < lines.length) {
+        line = line.slice(0, -1) + lines[++i].trimStart();
+      }
+    }
+    out.push(line);
+  }
+  return out;
+}
+
 function parsePropertyLine(line: string): ParsedVCFProperty | null {
   // Handle grouped properties like "item1.TEL"
   const groupMatch = line.match(/^([a-zA-Z0-9-]+)\.(.+)$/);
@@ -55,7 +73,7 @@ function parsePropertyLine(line: string): ParsedVCFProperty | null {
 export function tokenizeVCF(text: string): ParsedVCard[] {
   const normalized = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
   const unfolded = unfoldLines(normalized);
-  const lines = unfolded.split('\n');
+  const lines = joinQuotedPrintableSoftBreaks(unfolded.split('\n'));
 
   const vcards: ParsedVCard[] = [];
   let current: ParsedVCFProperty[] | null = null;
