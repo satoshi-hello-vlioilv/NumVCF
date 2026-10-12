@@ -32,27 +32,23 @@ function firstDialable(c: Contact) {
 interface ContactTableProps {
   groups: ContactGroup[];
   mode: GroupMode;
-  narrow: boolean;
 }
 
-// Full-width comparison table while browsing; once a contact is open it keeps
-// the same rows and sort headers but narrows to name / org / phone so the
-// detail panel can sit beside it without hiding the list.
-export function ContactTable({ groups, mode, narrow }: ContactTableProps) {
+export function ContactTable({ groups, mode }: ContactTableProps) {
   const { selectedId, setSelectedId, sortField, sortOrder, setSortField, setSortOrder, toggleFavorite } = useContactStore();
   const { profiles } = useFormatProfileStore();
   const { density, selectedIds, toggleSelectId } = useUIStore();
   const selectedRowRef = useRef<HTMLTableRowElement>(null);
   const multi = selectedIds.size > 0;
 
-  const cols: Col[] = narrow ? ['name', 'org', 'phone'] : ['name', 'org', 'phone', 'email', 'tags', 'source', 'updated'];
+  const cols: Col[] = ['name', 'org', 'phone', 'email', 'tags', 'source', 'updated'];
   const headers: Record<Col, string> = {
     name: '名前', org: mode === 'org' ? '部署 · 役職' : '会社 › 部署', phone: '電話', email: 'メール', tags: 'タグ', source: '取り込み元', updated: '更新',
   };
 
   useEffect(() => {
     selectedRowRef.current?.scrollIntoView({ block: 'nearest' });
-  }, [selectedId, narrow]);
+  }, [selectedId]);
 
   const onSort = (field: SortField) => {
     if (sortField === field) setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -100,7 +96,7 @@ export function ContactTable({ groups, mode, narrow }: ContactTableProps) {
     }
   };
 
-  const colSpan = cols.length + (narrow ? 0 : 1);
+  const colSpan = cols.length + 1;
 
   return (
     <table className="w-full text-sm border-separate border-spacing-0">
@@ -120,7 +116,7 @@ export function ContactTable({ groups, mode, narrow }: ContactTableProps) {
               </th>
             );
           })}
-          {!narrow && <th scope="col" className="border-b border-surface-border dark:border-dark-border"><span className="sr-only">操作</span></th>}
+          <th scope="col" className="border-b border-surface-border dark:border-dark-border"><span className="sr-only">操作</span></th>
         </tr>
       </thead>
       {groups.map(g => (
@@ -155,13 +151,12 @@ export function ContactTable({ groups, mode, narrow }: ContactTableProps) {
                     key={col}
                     className={`px-3 ${ROW_PAD[density]} border-b border-surface-border/50 dark:border-dark-border/50 ${
                       col === 'name' ? 'max-w-[220px]' : 'text-xs text-ink-secondary dark:text-slate-300'
-                    } ${col === 'phone' || col === 'updated' || col === 'source' ? 'whitespace-nowrap' : col === 'name' ? '' : narrow ? 'max-w-[150px] truncate' : 'max-w-[240px] truncate'}`}
+                    } ${col === 'phone' || col === 'updated' || col === 'source' ? 'whitespace-nowrap' : col === 'name' ? '' : 'max-w-[240px] truncate'}`}
                   >
                     {renderCell(c, col)}
                   </td>
                 ))}
-                {!narrow && (
-                  <td className={`px-2 ${ROW_PAD[density]} w-36 border-b border-surface-border/50 dark:border-dark-border/50`}>
+                <td className={`px-2 ${ROW_PAD[density]} w-36 border-b border-surface-border/50 dark:border-dark-border/50`}>
                     <span className="flex justify-end opacity-0 group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100" onClick={e => e.stopPropagation()}>
                       {tel && <IconButton icon={faPhone} label={`${tel.value} に発信`} href={`tel:${tel.value}`} size="sm" tone="primary" />}
                       {c.emails[0] && <IconButton icon={faEnvelope} label={`${c.emails[0].value} にメール`} href={`mailto:${c.emails[0].value}`} size="sm" />}
@@ -169,7 +164,6 @@ export function ContactTable({ groups, mode, narrow }: ContactTableProps) {
                       <IconButton icon={faStar} label={c.meta.isFavorite ? 'お気に入りから外す' : 'お気に入りに追加'} tone="favorite" active={c.meta.isFavorite} onClick={() => toggleFavorite(c.id)} size="sm" />
                     </span>
                   </td>
-                )}
               </tr>
             );
           })}

@@ -14,6 +14,9 @@ import { Popover, PopoverItem, PopoverDivider } from '../ui/Popover';
 import { Sheet } from '../ui/Sheet';
 import { useFacets } from './useFacets';
 import { profileShortLabel } from '../../utils/profileLabel';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
+
+const HEADER_BTN = 'flex-shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm text-ink-secondary hover:text-ink-primary hover:bg-surface-card dark:hover:bg-dark-surface whitespace-nowrap';
 
 function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
@@ -40,9 +43,9 @@ function PickerRow({ label, count, active, onClick }: { label: string; count: nu
   );
 }
 
-// Shown below the lg breakpoint, where the filter sidebar is hidden: the same
-// filters become a horizontally scrollable chip row so they stay one tap away.
-export function MobileTopBar() {
+// One header for every width, so search and filters never move when the window
+// is resized or a contact is opened.
+export function TopBar() {
   const navigate = useNavigate();
   const { contacts, filter, setFilter } = useContactStore();
   const { profiles } = useFormatProfileStore();
@@ -53,19 +56,36 @@ export function MobileTopBar() {
   const srcActive = filter.startsWith('fmt:');
 
   const choose = (f: string) => { setFilter(f); setPicker(null); };
+  const isLg = useMediaQuery('(min-width: 1024px)');
 
   return (
-    <div className="lg:hidden flex-shrink-0 bg-white dark:bg-dark-card border-b border-surface-border dark:border-dark-border">
-      <div className="flex items-center gap-2 px-3 h-12">
-        <FontAwesomeIcon icon={faAddressBook} className="text-primary-500 text-lg flex-shrink-0" aria-label="NumVCF" />
-        <SearchInput placeholder="検索" />
-        <IconButton icon={faPlus} label="連絡先を追加" tone="primary" onClick={() => navigate('/add')} />
+    <div className="flex-shrink-0 bg-white dark:bg-dark-card border-b border-surface-border dark:border-dark-border">
+      <div className="flex items-center gap-2 lg:gap-3 px-3 lg:px-4 h-12 lg:h-14">
+        <span className="flex items-center gap-2 flex-shrink-0">
+          <FontAwesomeIcon icon={faAddressBook} className="text-primary-500 text-lg" aria-label="NumVCF" />
+          <span className="hidden sm:inline font-bold text-primary-700 dark:text-primary-300 tracking-tight">NumVCF</span>
+          <span className="hidden sm:inline text-2xs font-mono text-ink-placeholder">v{__APP_VERSION__}</span>
+        </span>
+        <div className="flex-1 min-w-0 lg:flex-none lg:w-[28rem] xl:w-[34rem]">
+          <SearchInput placeholder={isLg ? '名前・会社・電話番号・メール・タグで検索（/）' : '検索'} />
+        </div>
+        <span className="hidden lg:block flex-1" />
+        {isLg && (
+          <>
+            <button type="button" onClick={() => setImportModalOpen(true)} title="VCF インポート (Ctrl+I)" className={HEADER_BTN}><FontAwesomeIcon icon={faFileImport} />取り込み</button>
+            <button type="button" onClick={() => setExportModalOpen(true)} title="VCF エクスポート (Ctrl+Shift+E)" className={HEADER_BTN}><FontAwesomeIcon icon={faFileExport} />書き出し</button>
+            <button type="button" onClick={() => navigate('/add')} title="連絡先を追加 (Ctrl+N)" className="flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary-500 hover:bg-primary-600 text-white text-sm whitespace-nowrap"><FontAwesomeIcon icon={faPlus} />追加</button>
+          </>
+        )}
+        {!isLg && <IconButton icon={faPlus} label="連絡先を追加" tone="primary" onClick={() => navigate('/add')} />}
         <Popover trigger={({ onClick }) => <IconButton icon={faEllipsisVertical} label="メニュー" onClick={onClick} />}>
           {close => (
             <>
-              <PopoverItem icon={faFileImport} label="VCF インポート" onClick={() => { setImportModalOpen(true); close(); }} />
-              <PopoverItem icon={faFileExport} label="VCF エクスポート" onClick={() => { setExportModalOpen(true); close(); }} />
-              <PopoverDivider />
+              {!isLg && <>
+                <PopoverItem icon={faFileImport} label="VCF インポート" onClick={() => { setImportModalOpen(true); close(); }} />
+                <PopoverItem icon={faFileExport} label="VCF エクスポート" onClick={() => { setExportModalOpen(true); close(); }} />
+                <PopoverDivider />
+              </>}
               <PopoverItem icon={isDarkMode ? faSun : faMoon} label={isDarkMode ? 'ライトモード' : 'ダークモード'} onClick={() => { toggleDarkMode(); close(); }} />
               <PopoverItem icon={faGear} label="設定" onClick={() => { navigate('/settings'); close(); }} />
               <div className="px-3 pt-1 pb-1.5 text-2xs font-mono text-ink-placeholder">NumVCF v{__APP_VERSION__}</div>
@@ -73,7 +93,7 @@ export function MobileTopBar() {
           )}
         </Popover>
       </div>
-      <div className="flex gap-1.5 overflow-x-auto px-3 pb-2 [scrollbar-width:none]">
+      <div className="flex gap-1.5 overflow-x-auto px-3 lg:px-4 pb-2 [scrollbar-width:none]">
         <Chip active={filter === 'all'} onClick={() => setFilter('all')}>すべて <span className="opacity-70">{contacts.length}</span></Chip>
         <Chip active={filter === 'fav'} onClick={() => setFilter('fav')}><FontAwesomeIcon icon={faStar} className="text-2xs" />お気に入り</Chip>
         <Chip active={filter === 'pin'} onClick={() => setFilter('pin')}><FontAwesomeIcon icon={faThumbTack} className="text-2xs" />ピン留め</Chip>

@@ -2,15 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faAddressBook, faFileImport, faPlus, faMagnifyingGlass } from '@fortawesome/free-solid-svg-icons';
-import { Sidebar } from './Sidebar';
-import { MobileTopBar } from './MobileTopBar';
-import { OverviewStrip } from './OverviewStrip';
+import { TopBar } from './TopBar';
 import { ListToolbar } from './ListToolbar';
 import { ContactTable } from '../contacts/ContactTable';
 import { ContactMobileList } from '../contacts/ContactMobileList';
 import { ContactDetail } from '../contacts/ContactDetail';
 import { AlphabetIndex } from '../contacts/AlphabetIndex';
-import { SearchInput, SEARCH_INPUT_ID } from '../search/SearchInput';
+import { SEARCH_INPUT_ID } from '../search/SearchInput';
 import { ImportCenter } from '../vcf/ImportCenter';
 import { ExportCenter } from '../vcf/ExportCenter';
 import { ToastContainer } from '../ui/Toast';
@@ -110,30 +108,24 @@ export function AppShell() {
       </div>
     );
   } else {
-    listBody = isMd
-      ? <ContactTable groups={groups} mode={groupMode} narrow={detailOpen} />
+    // With a contact open, the list narrows to two-line rows (name / org +
+    // phone) instead of a cramped table, so no column ever gets cut off.
+    listBody = isMd && !detailOpen
+      ? <ContactTable groups={groups} mode={groupMode} />
       : <ContactMobileList groups={groups} mode={groupMode} />;
   }
 
   return (
     <div className="h-screen flex bg-surface-base dark:bg-dark-base text-ink-primary dark:text-slate-100 overflow-hidden">
-      {isLg && <Sidebar />}
-
       <div className="flex-1 min-w-0 flex flex-col">
-        {!isLg && !listHiddenOnMobile && <MobileTopBar />}
+        {!listHiddenOnMobile && <TopBar />}
 
         <div className="flex-1 min-h-0 flex">
           {!listHiddenOnMobile && (
             <section
               aria-label="連絡先一覧"
-              className={`${detailOpen ? 'w-[500px] flex-shrink-0' : 'flex-1'} min-w-0 flex flex-col bg-white dark:bg-dark-card border-r border-surface-border dark:border-dark-border`}
+              className={`${detailOpen ? 'w-80 xl:w-96 flex-shrink-0' : 'flex-1'} min-w-0 flex flex-col bg-white dark:bg-dark-card border-r border-surface-border dark:border-dark-border`}
             >
-              {isLg && (
-                <div className="flex items-center gap-2 px-3 h-14 border-b border-surface-border dark:border-dark-border flex-shrink-0">
-                  <SearchInput placeholder={detailOpen ? '検索（/）' : '名前・会社・電話番号・メール・タグで検索（/）'} />
-                </div>
-              )}
-              {isLg && !detailOpen && contacts.length > 0 && <OverviewStrip />}
               {contacts.length > 0 && <ListToolbar count={visible.length} visibleIds={ordered.map(c => c.id)} onBulkDelete={() => setConfirmBulkDelete(true)} />}
               <div className="flex-1 min-h-0 flex">
                 <div className="flex-1 min-w-0 overflow-auto">{listBody}</div>
