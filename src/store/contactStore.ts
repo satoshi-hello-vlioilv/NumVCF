@@ -2,17 +2,21 @@ import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import { db } from '../db/schema';
 import type { Contact, SortField, SortOrder } from '../types/contact';
-import { sortContacts } from '../utils/sort';
+import { sortContacts } from '../utils/grouping';
+import { MANUAL_SOURCE } from '../utils/profileLabel';
+
+// 'all' | 'fav' | 'pin' | `tag:${name}` | `fmt:${profileId}`
+export type ContactFilter = string;
 
 interface ContactStore {
   contacts: Contact[];
   selectedId: string | null;
   searchQuery: string;
-  filterGroups: string[];
-  filterTags: string[];
+  filter: ContactFilter;
   sortField: SortField;
   sortOrder: SortOrder;
   isLoading: boolean;
+  isLoaded: boolean;
 
   loadContacts: () => Promise<void>;
   addContact: (contact: Contact) => Promise<void>;
@@ -21,19 +25,45 @@ interface ContactStore {
   deleteContacts: (ids: string[]) => Promise<void>;
   setSelectedId: (id: string | null) => void;
   setSearchQuery: (q: string) => void;
-  setFilterGroups: (groups: string[]) => void;
-  setFilterTags: (tags: string[]) => void;
+  setFilter: (filter: ContactFilter) => void;
   setSortField: (field: SortField) => void;
   setSortOrder: (order: SortOrder) => void;
   toggleFavorite: (id: string) => Promise<void>;
   togglePinned: (id: string) => Promise<void>;
 
   filteredContacts: () => Contact[];
-  groupedContacts: () => GroupedContacts;
 }
 
-export interface GroupedContacts {
-  [key: string]: Contact[];
+export function filterContacts(
+  contacts: Contact[], searchQuery: string, filter: ContactFilter, sortField: SortField, sortOrder: SortOrder,
+): Contact[] {
+  let result = contacts;
+
+  const q = searchQuery.trim().toLowerCase();
+  if (q) {
+    // Only compare phone digits when the query contains digits; an empty
+    // digit string would otherwise match every contact that has a phone.
+    const qDigits = q.replace(/\D/g, '');
+    result = result.filter(c =>
+      c.name.formatted.toLowerCase().includes(q) ||
+      c.nameKana?.formatted?.toLowerCase().includes(q) ||
+      c.organization?.toLowerCase().includes(q) ||
+      c.department?.toLowerCase().includes(q) ||
+      c.emails.some(e => e.value.toLowerCase().includes(q)) ||
+      c.meta.tags.some(t => t.toLowerCase().includes(q)) ||
+      (qDigits.length > 0 && c.phones.some(p => p.value.replace(/\D/g, '').includes(qDigits)))
+    );
+  }
+
+  if (filter === 'fav') result = result.filter(c => c.meta.isFavorite);
+  else if (filter === 'pin') result = result.filter(c => c.meta.isPinned);
+  else if (filter.startsWith('tag:')) result = result.filter(c => c.meta.tags.includes(filter.slice(4)));
+  else if (filter.startsWith('fmt:')) {
+    const id = filter.slice(4);
+    result = result.filter(c => (c.meta.formatProfileId ?? MANUAL_SOURCE) === id);
+  }
+
+  return sortContacts(result, sortField, sortOrder);
 }
 
 export const useContactStore = create<ContactStore>()(
@@ -41,11 +71,11 @@ export const useContactStore = create<ContactStore>()(
     contacts: [],
     selectedId: null,
     searchQuery: '',
-    filterGroups: [],
-    filterTags: [],
+    filter: 'all',
     sortField: 'name',
     sortOrder: 'asc',
     isLoading: false,
+    isLoaded: false,
 
     loadContacts: async () => {
       set(s => { s.isLoading = true; });
@@ -53,6 +83,7 @@ export const useContactStore = create<ContactStore>()(
       set(s => {
         s.contacts = contacts;
         s.isLoading = false;
+        s.isLoaded = true;
       });
     },
 
@@ -91,8 +122,7 @@ export const useContactStore = create<ContactStore>()(
 
     setSelectedId: (id) => set(s => { s.selectedId = id; }),
     setSearchQuery: (q) => set(s => { s.searchQuery = q; }),
-    setFilterGroups: (groups) => set(s => { s.filterGroups = groups; }),
-    setFilterTags: (tags) => set(s => { s.filterTags = tags; }),
+    setFilter: (filter) => set(s => { s.filter = filter; }),
     setSortField: (field) => set(s => { s.sortField = field; }),
     setSortOrder: (order) => set(s => { s.sortOrder = order; }),
 
@@ -119,66 +149,8 @@ export const useContactStore = create<ContactStore>()(
     },
 
     filteredContacts: () => {
-      const { contacts, searchQuery, filterGroups, filterTags, sortField, sortOrder } = get();
-      let result = contacts;
-
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        result = result.filter(c =>
-          c.name.formatted.toLowerCase().includes(q) ||
-          c.name.family?.toLowerCase().includes(q) ||
-          c.name.given?.toLowerCase().includes(q) ||
-          c.organization?.toLowerCase().includes(q) ||
-          c.nameKana?.formatted?.toLowerCase().includes(q) ||
-          c.phones.some(p => p.value.replace(/[^\d]/g, '').includes(q.replace(/[^\d]/g, ''))) ||
-          c.emails.some(e => e.value.toLowerCase().includes(q))
-        );
-      }
-
-      if (filterGroups.length > 0) {
-        result = result.filter(c => filterGroups.some(g => c.meta.groups.includes(g)));
-      }
-      if (filterTags.length > 0) {
-        result = result.filter(c => filterTags.some(t => c.meta.tags.includes(t)));
-      }
-
-      return sortContacts(result, sortField, sortOrder);
-    },
-
-    groupedContacts: () => {
-      const filtered = get().filteredContacts();
-      const groups: GroupedContacts = {};
-
-      for (const contact of filtered) {
-        const key = getGroupKey(contact);
-        if (!groups[key]) groups[key] = [];
-        groups[key].push(contact);
-      }
-
-      return groups;
+      const { contacts, searchQuery, filter, sortField, sortOrder } = get();
+      return filterContacts(contacts, searchQuery, filter, sortField, sortOrder);
     },
   }))
 );
-
-function getGroupKey(contact: Contact): string {
-  const kana = contact.nameKana?.family || contact.nameKana?.formatted;
-  if (kana) {
-    const ch = kana.charAt(0);
-    if (/[あ-お]/.test(ch)) return 'あ';
-    if (/[か-こが-ご]/.test(ch)) return 'か';
-    if (/[さ-そざ-ぞ]/.test(ch)) return 'さ';
-    if (/[た-とだ-ど]/.test(ch)) return 'た';
-    if (/[な-の]/.test(ch)) return 'な';
-    if (/[は-ほば-ぼぱ-ぽ]/.test(ch)) return 'は';
-    if (/[ま-も]/.test(ch)) return 'ま';
-    if (/[や-よ]/.test(ch)) return 'や';
-    if (/[ら-ろ]/.test(ch)) return 'ら';
-    if (/[わ-ん]/.test(ch)) return 'わ';
-  }
-
-  const name = contact.name.family || contact.name.formatted;
-  const first = name.charAt(0).toUpperCase();
-  if (/[A-Z]/.test(first)) return first;
-  if (/[一-龯]/.test(first)) return '#';
-  return '#';
-}

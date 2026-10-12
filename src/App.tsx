@@ -4,13 +4,22 @@ import { AppShell } from './components/layout/AppShell';
 import { ContactEditPage } from './pages/ContactEditPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { useFormatProfileStore } from './store/formatProfileStore';
+import { useContactStore } from './store/contactStore';
+import { useUIStore } from './store/uiStore';
 
 export default function App() {
-  const { loadProfiles } = useFormatProfileStore();
+  const loadProfiles = useFormatProfileStore(s => s.loadProfiles);
+  const loadContacts = useContactStore(s => s.loadContacts);
+  const isDarkMode = useUIStore(s => s.isDarkMode);
 
   useEffect(() => {
     loadProfiles();
-  }, [loadProfiles]);
+    loadContacts();
+  }, [loadProfiles, loadContacts]);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', isDarkMode);
+  }, [isDarkMode]);
 
   return (
     <BrowserRouter>
