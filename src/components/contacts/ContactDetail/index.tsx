@@ -19,6 +19,7 @@ import { useUIStore } from '../../../store/uiStore';
 import type { Contact } from '../../../types/contact';
 import { relativeDate } from '../../../utils/date';
 import { formatAddress } from '../../../utils/address';
+import { sortContacts } from '../../../utils/grouping';
 import { useElementWidth } from '../../../hooks/useElementWidth';
 
 function copy(text: string, label: string) {
@@ -89,7 +90,11 @@ export function ContactDetail({ contact: c, onClose }: ContactDetailProps) {
   const [rootRef, paneWidth] = useElementWidth<HTMLDivElement>();
   const twoColumns = paneWidth >= 700;
 
-  const colleagues = c.organization ? contacts.filter(o => o.id !== c.id && o.organization === c.organization) : [];
+  // Same order every time: by department (none last), then by reading.
+  const colleagues = c.organization
+    ? sortContacts(contacts.filter(o => o.id !== c.id && o.organization === c.organization), 'name', 'asc')
+      .sort((a, b) => (!a.department ? 1 : 0) - (!b.department ? 1 : 0) || (a.department ?? '').localeCompare(b.department ?? '', 'ja'))
+    : [];
   const tel = c.phones.find(p => !isFax(p.label));
   const mail = c.emails[0];
   const profile = profiles.find(p => p.id === c.meta.formatProfileId);
