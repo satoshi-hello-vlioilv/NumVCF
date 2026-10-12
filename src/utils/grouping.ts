@@ -4,8 +4,6 @@ export type GroupMode = 'kana' | 'org';
 
 export const NO_ORG_LABEL = '所属なし';
 
-export const groupAnchorId = (key: string) => `group-${key}`;
-
 const KANA_ROWS: [string, RegExp][] = [
   ['あ', /^[ぁ-おァ-オ]/], ['か', /^[か-ごカ-ゴ]/], ['さ', /^[さ-ぞサ-ゾ]/], ['た', /^[た-どタ-ド]/],
   ['な', /^[な-のナ-ノ]/], ['は', /^[は-ぽハ-ポ]/], ['ま', /^[ま-もマ-モ]/], ['や', /^[ゃ-よャ-ヨ]/],

@@ -21,7 +21,7 @@ export function ImportCenter() {
   const [pendingContacts, setPendingContacts] = useState<Contact[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const { addContact } = useContactStore();
+  const { importContacts } = useContactStore();
   const { profiles } = useFormatProfileStore();
   const { setImportModalOpen, addToast } = useUIStore();
 
@@ -57,12 +57,15 @@ export function ImportCenter() {
 
   const handleImport = async () => {
     setStep('parsing');
-    for (const contact of pendingContacts) {
-      await addContact(contact);
+    try {
+      const { added, skippedDuplicateUid } = await importContacts(pendingContacts);
+      setResult(prev => prev ? { ...prev, imported: added, skipped: skippedDuplicateUid } : prev);
+      setStep('done');
+      addToast({ type: 'success', message: `${added} 件の連絡先をインポートしました` });
+    } catch (e) {
+      addToast({ type: 'error', message: `登録に失敗しました: ${String(e)}` });
+      setStep('preview');
     }
-    setResult(prev => prev ? { ...prev, imported: pendingContacts.length } : prev);
-    setStep('done');
-    addToast({ type: 'success', message: `${pendingContacts.length} 件の連絡先をインポートしました` });
   };
 
   const profileName = profiles.find(p => p.id === detectedProfile)?.name;
@@ -151,7 +154,8 @@ export function ImportCenter() {
         {step === 'done' && (
           <div className="flex flex-col items-center justify-center py-16 gap-3">
             <FontAwesomeIcon icon={faCircleCheck} className="text-4xl text-status-success" />
-            <p className="font-semibold text-ink-primary">{pendingContacts.length} 件をインポート完了</p>
+            <p className="font-semibold text-ink-primary">{result?.imported ?? 0} 件をインポート完了</p>
+            {!!result?.skipped && <p className="text-xs text-ink-secondary">同じ UID の連絡先が既にあるため {result.skipped} 件はスキップしました</p>}
           </div>
         )}
       </div>

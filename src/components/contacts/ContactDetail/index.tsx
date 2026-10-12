@@ -30,6 +30,8 @@ function addressText(a: ContactAddress) {
   return a.formatted || [a.postalCode && `〒${a.postalCode}`, a.region, a.city, a.street, a.extended, a.country].filter(Boolean).join(' ');
 }
 
+const COLLEAGUE_LIMIT = 8;
+
 function isFax(label: string) {
   return label.includes('fax');
 }
@@ -82,7 +84,7 @@ interface ContactDetailProps {
 
 export function ContactDetail({ contact: c, onClose }: ContactDetailProps) {
   const navigate = useNavigate();
-  const { contacts, setSelectedId, deleteContact, toggleFavorite, togglePinned } = useContactStore();
+  const { contacts, setSelectedId, setSearchQuery, deleteContact, toggleFavorite, togglePinned } = useContactStore();
   const { profiles } = useFormatProfileStore();
   const { addToast, selectAll, setExportModalOpen } = useUIStore();
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -174,7 +176,7 @@ export function ContactDetail({ contact: c, onClose }: ContactDetailProps) {
             </Card>
             {colleagues.length > 0 && (
               <Card title={`同じ組織の連絡先 ${colleagues.length}`} icon={faUsers}>
-                {colleagues.map(o => (
+                {colleagues.slice(0, COLLEAGUE_LIMIT).map(o => (
                   <button key={o.id} type="button" onClick={() => setSelectedId(o.id)} className="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-lg hover:bg-surface-base dark:hover:bg-dark-surface text-left min-w-0">
                     <Avatar name={o.name.formatted} family={o.name.family} given={o.name.given} photo={o.photo} size="xs" />
                     <span className="text-sm whitespace-nowrap">{o.name.formatted}</span>
@@ -182,6 +184,11 @@ export function ContactDetail({ contact: c, onClose }: ContactDetailProps) {
                     {o.phones[0] && <span className="text-xs font-mono text-ink-placeholder">{o.phones[0].value}</span>}
                   </button>
                 ))}
+                {colleagues.length > COLLEAGUE_LIMIT && (
+                  <button type="button" onClick={() => setSearchQuery(c.organization ?? '')} className="w-full px-3 py-1.5 rounded-lg text-left text-xs text-primary-600 hover:bg-surface-base dark:hover:bg-dark-surface">
+                    ほか {colleagues.length - COLLEAGUE_LIMIT} 件 — 一覧をこの組織で絞り込む
+                  </button>
+                )}
               </Card>
             )}
           </div>

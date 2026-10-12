@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faAddressBook, faFileImport, faPlus, faMagnifyingGlass } from '@fortawesome/free-solid-svg-icons';
@@ -16,7 +16,12 @@ import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { useContactStore, filterContacts } from '../../store/contactStore';
 import { useUIStore } from '../../store/uiStore';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
-import { groupContacts, groupAnchorId } from '../../utils/grouping';
+import { groupContacts } from '../../utils/grouping';
+import { useVirtualRows } from '../../hooks/useVirtualRows';
+import type { DisplayDensity } from '../../types/contact';
+
+const TABLE_ROW_H: Record<DisplayDensity, number> = { compact: 41, comfortable: 45, spacious: 57 };
+const LIST_ROW_H: Record<DisplayDensity, number> = { compact: 53, comfortable: 57, spacious: 69 };
 
 const NON_TEXT_INPUTS = new Set(['checkbox', 'radio', 'button', 'submit', 'reset', 'range', 'color', 'file']);
 
@@ -31,7 +36,7 @@ export function AppShell() {
   const isMd = useMediaQuery('(min-width: 768px)');
   const { contacts, isLoaded, selectedId, setSelectedId, sortField, sortOrder, searchQuery, filter, deleteContacts } = useContactStore();
   const {
-    groupMode, isImportModalOpen, setImportModalOpen, isExportModalOpen, setExportModalOpen,
+    groupMode, density, isImportModalOpen, setImportModalOpen, isExportModalOpen, setExportModalOpen,
     selectedIds, clearSelection, addToast,
   } = useUIStore();
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
@@ -42,9 +47,6 @@ export function AppShell() {
   const selected = contacts.find(c => c.id === selectedId) ?? null;
   const showIndex = groupMode === 'kana' && groups.length > 1;
 
-  const jumpTo = (key: string) => {
-    document.getElementById(groupAnchorId(key))?.scrollIntoView({ block: 'start' });
-  };
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === 'Escape') {
@@ -84,6 +86,17 @@ export function AppShell() {
   // Below lg the screen is too narrow for list + detail side by side, so the
   // detail takes the whole width and the list returns when it is closed.
   const listHiddenOnMobile = detailOpen && !isLg;
+  const asTable = isMd && !detailOpen;
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const virtual = useVirtualRows(groups, scrollRef, {
+    rowHeight: asTable ? TABLE_ROW_H[density] : LIST_ROW_H[density],
+    headerHeight: asTable ? 27 : 26,
+    scrollPaddingStart: asTable ? 33 : 26,
+  });
+  const { scrollToContact } = virtual;
+  useEffect(() => {
+    if (selectedId) scrollToContact(selectedId);
+  }, [selectedId, scrollToContact]);
 
   let listBody: React.ReactNode;
   if (!isLoaded) {
@@ -110,9 +123,9 @@ export function AppShell() {
   } else {
     // With a contact open, the list narrows to two-line rows (name / org +
     // phone) instead of a cramped table, so no column ever gets cut off.
-    listBody = isMd && !detailOpen
-      ? <ContactTable groups={groups} mode={groupMode} />
-      : <ContactMobileList groups={groups} mode={groupMode} />;
+    listBody = asTable
+      ? <ContactTable virtual={virtual} mode={groupMode} />
+      : <ContactMobileList virtual={virtual} mode={groupMode} />;
   }
 
   return (
@@ -128,8 +141,8 @@ export function AppShell() {
             >
               {contacts.length > 0 && <ListToolbar count={visible.length} visibleIds={ordered.map(c => c.id)} onBulkDelete={() => setConfirmBulkDelete(true)} />}
               <div className="flex-1 min-h-0 flex">
-                <div className="flex-1 min-w-0 overflow-auto">{listBody}</div>
-                {showIndex && visible.length > 0 && <AlphabetIndex availableKeys={new Set(groups.map(g => g.key))} onSelect={jumpTo} />}
+                <div ref={scrollRef} className="flex-1 min-w-0 overflow-auto">{listBody}</div>
+                {showIndex && visible.length > 0 && <AlphabetIndex availableKeys={new Set(groups.map(g => g.key))} onSelect={virtual.scrollToGroup} />}
               </div>
             </section>
           )}
