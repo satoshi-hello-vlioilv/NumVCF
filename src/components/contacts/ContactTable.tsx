@@ -51,7 +51,7 @@ function firstDialable(c: Contact) {
   return c.phones.find(p => !p.label.includes('fax'));
 }
 
-const CHECKBOX = 'w-4 h-4 rounded border-surface-border dark:border-dark-border text-primary-500 cursor-pointer';
+const CHECKBOX = 'w-4 h-4 accent-primary-500 dark:[color-scheme:dark] cursor-pointer';
 
 interface ContactTableProps {
   virtual: VirtualRowsModel;
