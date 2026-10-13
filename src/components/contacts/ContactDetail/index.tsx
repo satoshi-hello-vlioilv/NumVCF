@@ -16,8 +16,11 @@ import { Popover, PopoverItem, PopoverDivider } from '../../ui/Popover';
 import { useContactStore } from '../../../store/contactStore';
 import { useFormatProfileStore } from '../../../store/formatProfileStore';
 import { useUIStore } from '../../../store/uiStore';
-import type { Contact, ContactAddress } from '../../../types/contact';
+import type { Contact } from '../../../types/contact';
 import { relativeDate } from '../../../utils/date';
+import { formatAddress } from '../../../utils/address';
+import { sortContacts } from '../../../utils/grouping';
+import { useElementWidth } from '../../../hooks/useElementWidth';
 
 function copy(text: string, label: string) {
   navigator.clipboard.writeText(text)
@@ -25,20 +28,24 @@ function copy(text: string, label: string) {
     .catch(() => useUIStore.getState().addToast({ type: 'error', message: 'コピーできませんでした' }));
 }
 
-function addressText(a: ContactAddress) {
-  return a.formatted || [a.postalCode && `〒${a.postalCode}`, a.region, a.city, a.street, a.extended, a.country].filter(Boolean).join(' ');
-}
+
+const COLLEAGUE_LIMIT = 8;
 
 function isFax(label: string) {
   return label.includes('fax');
 }
 
 function MethodRow({ icon, label, value, kind }: { icon: IconDefinition; label: string; value: string; kind: 'tel' | 'fax' | 'mail' | 'im' }) {
+  // Phone numbers are the one thing a phone book must never truncate.
+  const isNumber = kind === 'tel' || kind === 'fax';
   return (
     <div className="flex items-center gap-2 md:gap-3 px-2 md:px-3 py-1.5 rounded-lg hover:bg-surface-base dark:hover:bg-dark-surface min-w-0">
       <FontAwesomeIcon icon={icon} className={`w-4 text-sm flex-shrink-0 ${kind === 'mail' ? 'text-teal-400' : kind === 'im' ? 'text-sage-500' : 'text-primary-400'}`} />
-      <span className="w-16 flex-shrink-0 text-xs text-ink-placeholder truncate">{label}</span>
-      <span className={`flex-1 min-w-0 text-sm text-ink-primary dark:text-slate-100 truncate ${kind === 'tel' || kind === 'fax' ? 'font-mono' : ''}`} title={value}>{value}</span>
+      <span className="w-16 min-w-[2.5rem] flex-shrink text-xs text-ink-placeholder truncate">{label}</span>
+      {isNumber ? <>
+        <span className="flex-shrink-0 whitespace-nowrap font-mono text-sm text-ink-primary dark:text-slate-100">{value}</span>
+        <span className="flex-1" />
+      </> : <span className="flex-1 min-w-0 break-all text-sm text-ink-primary dark:text-slate-100">{value}</span>}
       <span className="flex items-center flex-shrink-0">
         {kind === 'tel' && <>
           <IconButton icon={faPhone} label={`${value} に発信`} href={`tel:${value}`} size="sm" tone="primary" />
@@ -76,12 +83,18 @@ interface ContactDetailProps {
 
 export function ContactDetail({ contact: c, onClose }: ContactDetailProps) {
   const navigate = useNavigate();
-  const { contacts, setSelectedId, deleteContact, toggleFavorite, togglePinned } = useContactStore();
+  const { contacts, setSelectedId, setSearchQuery, deleteContact, toggleFavorite, togglePinned } = useContactStore();
   const { profiles } = useFormatProfileStore();
   const { addToast, selectAll, setExportModalOpen } = useUIStore();
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [rootRef, paneWidth] = useElementWidth<HTMLDivElement>();
+  const twoColumns = paneWidth >= 700;
 
-  const colleagues = c.organization ? contacts.filter(o => o.id !== c.id && o.organization === c.organization) : [];
+  // Same order every time: by department (none last), then by reading.
+  const colleagues = c.organization
+    ? sortContacts(contacts.filter(o => o.id !== c.id && o.organization === c.organization), 'name', 'asc')
+      .sort((a, b) => (!a.department ? 1 : 0) - (!b.department ? 1 : 0) || (a.department ?? '').localeCompare(b.department ?? '', 'ja'))
+    : [];
   const tel = c.phones.find(p => !isFax(p.label));
   const mail = c.emails[0];
   const profile = profiles.find(p => p.id === c.meta.formatProfileId);
@@ -111,10 +124,10 @@ export function ContactDetail({ contact: c, onClose }: ContactDetailProps) {
     </Popover>
   );
 
-  const primaryAction = 'inline-flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm transition-colors';
+  const primaryAction = 'inline-flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm transition-colors whitespace-nowrap';
 
   return (
-    <div className="h-full flex flex-col bg-white dark:bg-dark-card min-w-0">
+    <div ref={rootRef} className="h-full flex flex-col bg-white dark:bg-dark-card min-w-0">
       {/* Mobile app bar */}
       <div className="md:hidden flex items-center gap-1 px-2 h-12 border-b border-surface-border dark:border-dark-border flex-shrink-0">
         <IconButton icon={faArrowLeft} label="一覧に戻る" onClick={onClose} />
@@ -129,7 +142,7 @@ export function ContactDetail({ contact: c, onClose }: ContactDetailProps) {
           <Avatar name={c.name.formatted} family={c.name.family} given={c.name.given} photo={c.photo} size="xl" />
           <div className="flex-1 min-w-0">
             <div className="flex items-baseline gap-x-2 flex-wrap">
-              <h2 className="text-xl font-semibold text-ink-primary dark:text-slate-100">{c.name.formatted}</h2>
+              <h2 className="text-xl font-semibold text-ink-primary dark:text-slate-100 break-words">{c.name.formatted}</h2>
               {c.nameKana?.formatted && <span className="text-xs text-ink-placeholder whitespace-nowrap">{c.nameKana.formatted}</span>}
               {c.nickname && <span className="text-xs text-ink-secondary whitespace-nowrap">「{c.nickname}」</span>}
             </div>
@@ -148,7 +161,7 @@ export function ContactDetail({ contact: c, onClose }: ContactDetailProps) {
           </div>
         </header>
 
-        <div className="hidden md:flex gap-2 px-6 pb-4">
+        <div className="hidden md:flex flex-wrap gap-2 px-6 pb-4">
           {tel
             ? <a href={`tel:${tel.value}`} className={`${primaryAction} bg-primary-500 hover:bg-primary-600 text-white`}><FontAwesomeIcon icon={faPhone} />電話</a>
             : <span className={`${primaryAction} bg-surface-card text-ink-placeholder cursor-not-allowed`}><FontAwesomeIcon icon={faPhone} />電話</span>}
@@ -156,7 +169,7 @@ export function ContactDetail({ contact: c, onClose }: ContactDetailProps) {
           {mail && <a href={`mailto:${mail.value}`} className={`${primaryAction} bg-surface-card dark:bg-dark-surface text-ink-primary dark:text-slate-200 hover:bg-surface-border`}><FontAwesomeIcon icon={faEnvelope} />メール</a>}
         </div>
 
-        <div className="px-3 md:px-4 pb-20 md:pb-6 grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
+        <div className={`px-3 md:px-4 pb-20 md:pb-6 grid gap-4 ${twoColumns ? 'grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]' : ''}`}>
           <div className="space-y-4 min-w-0">
             <Card title="連絡方法">
               {c.phones.length + c.emails.length + c.instantMessages.length === 0 && <p className="px-3 pb-2 text-sm text-ink-placeholder">電話番号・メールは登録されていません</p>}
@@ -166,7 +179,7 @@ export function ContactDetail({ contact: c, onClose }: ContactDetailProps) {
             </Card>
             {colleagues.length > 0 && (
               <Card title={`同じ組織の連絡先 ${colleagues.length}`} icon={faUsers}>
-                {colleagues.map(o => (
+                {colleagues.slice(0, COLLEAGUE_LIMIT).map(o => (
                   <button key={o.id} type="button" onClick={() => setSelectedId(o.id)} className="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-lg hover:bg-surface-base dark:hover:bg-dark-surface text-left min-w-0">
                     <Avatar name={o.name.formatted} family={o.name.family} given={o.name.given} photo={o.photo} size="xs" />
                     <span className="text-sm whitespace-nowrap">{o.name.formatted}</span>
@@ -174,15 +187,20 @@ export function ContactDetail({ contact: c, onClose }: ContactDetailProps) {
                     {o.phones[0] && <span className="text-xs font-mono text-ink-placeholder">{o.phones[0].value}</span>}
                   </button>
                 ))}
+                {colleagues.length > COLLEAGUE_LIMIT && (
+                  <button type="button" onClick={() => setSearchQuery(c.organization ?? '')} className="w-full px-3 py-1.5 rounded-lg text-left text-xs text-primary-600 hover:bg-surface-base dark:hover:bg-dark-surface">
+                    ほか {colleagues.length - COLLEAGUE_LIMIT} 件 — 一覧をこの組織で絞り込む
+                  </button>
+                )}
               </Card>
             )}
           </div>
 
-          <div className="px-2 xl:px-1 space-y-4 min-w-0">
+          <div className={`space-y-4 min-w-0 ${twoColumns ? 'px-1' : 'px-2'}`}>
             {c.addresses.map(a => (
               <Block key={a.id} icon={faLocationDot} title={`住所（${a.labelDisplay ?? a.label}）`}>
-                <p className="break-words">{addressText(a.value)}
-                  <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addressText(a.value))}`} target="_blank" rel="noopener noreferrer" className="ml-2 text-xs text-primary-600 hover:underline whitespace-nowrap">
+                <p className="break-words">{formatAddress(a.value)}
+                  <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(formatAddress(a.value))}`} target="_blank" rel="noopener noreferrer" className="ml-2 text-xs text-primary-600 hover:underline whitespace-nowrap">
                     地図<FontAwesomeIcon icon={faUpRightFromSquare} className="ml-1 text-[9px]" />
                   </a>
                 </p>

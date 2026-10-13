@@ -1,5 +1,7 @@
 import type { Contact } from '../../types/contact';
 import type { VCFFormatProfile } from '../../types/vcfFormat';
+import { escapeText } from '../escape';
+import { encodeQuotedPrintable } from '../parser/quirks/quotedPrintable';
 
 function foldLine(line: string, maxLen = 75): string {
   if (line.length <= maxLen) return line;
@@ -25,16 +27,28 @@ function prop(name: string, value: string | undefined, profile: VCFFormatProfile
   return foldLine(line, profile.exportTemplate.foldingLength) + lineEnding;
 }
 
-function addressToVCF(addr: NonNullable<Contact['addresses'][0]>['value']): string {
-  return [
-    addr.poBox || '',
-    addr.extended || '',
-    addr.street || '',
-    addr.city || '',
-    addr.region || '',
-    addr.postalCode || '',
-    addr.country || '',
-  ].join(';');
+// vCard 2.1 has no "\n" escape: multi-line text must be sent as
+// Quoted-Printable. 3.0/4.0 use backslash escaping instead.
+function escapeComponent(value: string, profile: VCFFormatProfile): string {
+  return profile.version === '2.1' ? value.replace(/;/g, '\\;') : escapeText(value);
+}
+
+function textProp(name: string, value: string | undefined, profile: VCFFormatProfile, params?: Record<string, string>): string {
+  if (!value?.trim()) return '';
+  if (profile.version === '2.1' && /[\r\n]/.test(value)) {
+    const paramStr = Object.entries({ ...params, ENCODING: 'QUOTED-PRINTABLE', CHARSET: 'UTF-8' }).map(([k, v]) => `;${k}=${v}`).join('');
+    const lineEnding = profile.exportTemplate.lineEnding === 'CRLF' ? '\r\n' : '\n';
+    return `${name}${paramStr}:${encodeQuotedPrintable(value.replace(/\r?\n/g, '\r\n'))}${lineEnding}`;
+  }
+  return prop(name, escapeComponent(value, profile), profile, params);
+}
+
+function structured(values: (string | undefined)[], profile: VCFFormatProfile, separator = ';'): string {
+  return values.map(v => escapeComponent(v ?? '', profile)).join(separator);
+}
+
+function addressToVCF(addr: NonNullable<Contact['addresses'][0]>['value'], profile: VCFFormatProfile): string {
+  return structured([addr.poBox, addr.extended, addr.street, addr.city, addr.region, addr.postalCode, addr.country], profile);
 }
 
 export function serializeContacts(contacts: Contact[], profile: VCFFormatProfile): string {
@@ -50,24 +64,24 @@ export function serializeContacts(contacts: Contact[], profile: VCFFormatProfile
     if (contact.rev) parts.push(prop('REV', contact.rev, profile));
 
     const n = contact.name;
-    parts.push(prop('FN', n.formatted, profile));
-    parts.push(prop('N', `${n.family || ''};${n.given || ''};${n.additional || ''};${n.prefix || ''};${n.suffix || ''}`, profile));
+    parts.push(textProp('FN', n.formatted, profile));
+    parts.push(prop('N', structured([n.family, n.given, n.additional, n.prefix, n.suffix], profile), profile));
 
     if (contact.nameKana?.formatted) {
       if (profile.version === '2.1') {
-        parts.push(prop('SOUND', contact.nameKana.formatted, profile));
+        parts.push(textProp('SOUND', contact.nameKana.formatted, profile));
       } else {
-        parts.push(prop('X-PHONETIC-LAST-NAME', contact.nameKana.family || '', profile));
-        parts.push(prop('X-PHONETIC-FIRST-NAME', contact.nameKana.given || '', profile));
+        parts.push(textProp('X-PHONETIC-LAST-NAME', contact.nameKana.family, profile));
+        parts.push(textProp('X-PHONETIC-FIRST-NAME', contact.nameKana.given, profile));
       }
     }
 
     if (contact.organization) {
-      parts.push(prop('ORG', contact.department ? `${contact.organization};${contact.department}` : contact.organization, profile));
+      parts.push(prop('ORG', structured(contact.department ? [contact.organization, contact.department] : [contact.organization], profile), profile));
     }
-    if (contact.title) parts.push(prop('TITLE', contact.title, profile));
-    if (contact.role) parts.push(prop('ROLE', contact.role, profile));
-    if (contact.nickname) parts.push(prop('NICKNAME', contact.nickname, profile));
+    if (contact.title) parts.push(textProp('TITLE', contact.title, profile));
+    if (contact.role) parts.push(textProp('ROLE', contact.role, profile));
+    if (contact.nickname) parts.push(textProp('NICKNAME', contact.nickname, profile));
     if (contact.birthday) parts.push(prop('BDAY', contact.birthday, profile));
     if (contact.anniversary) parts.push(prop('ANNIVERSARY', contact.anniversary, profile));
     if (contact.gender) parts.push(prop('GENDER', contact.gender, profile));
@@ -89,7 +103,7 @@ export function serializeContacts(contacts: Contact[], profile: VCFFormatProfile
 
     for (const addr of contact.addresses) {
       const typeParam = labelToAddressType(addr.label);
-      parts.push(prop('ADR', addressToVCF(addr.value), profile, typeParam ? { TYPE: typeParam } : undefined));
+      parts.push(prop('ADR', addressToVCF(addr.value, profile), profile, typeParam ? { TYPE: typeParam } : undefined));
     }
 
     for (const im of contact.instantMessages) {
@@ -97,10 +111,10 @@ export function serializeContacts(contacts: Contact[], profile: VCFFormatProfile
     }
 
     if (contact.meta.tags.length > 0) {
-      parts.push(prop('CATEGORIES', contact.meta.tags.join(','), profile));
+      parts.push(prop('CATEGORIES', structured(contact.meta.tags, profile, ','), profile));
     }
 
-    if (contact.meta.notes) parts.push(prop('NOTE', contact.meta.notes, profile));
+    if (contact.meta.notes) parts.push(textProp('NOTE', contact.meta.notes, profile));
 
     parts.push(`END:VCARD${LE}`);
     lines.push(parts.filter(Boolean).join(''));

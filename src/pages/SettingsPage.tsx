@@ -31,7 +31,7 @@ export function SettingsPage() {
         <h1 className="font-semibold text-ink-primary">設定</h1>
       </header>
 
-      <div className="flex-1 overflow-y-auto p-6 max-w-3xl mx-auto w-full space-y-8">
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6 max-w-3xl mx-auto w-full space-y-8">
         <section>
           <div className="flex items-center gap-2 mb-3">
             <FontAwesomeIcon icon={faDisplay} className="text-primary-400" />
@@ -43,12 +43,12 @@ export function SettingsPage() {
               ['一覧の表示密度', [['compact', 'コンパクト'], ['comfortable', '標準'], ['spacious', 'ゆったり']], density, (v: string) => setDensity(v as typeof density)],
               ['一覧のグループ', [['kana', '五十音'], ['org', '組織別']], groupMode, (v: string) => setGroupMode(v as typeof groupMode)],
             ] as const).map(([label, options, value, onChange]) => (
-              <div key={label} className="flex items-center justify-between gap-4 px-4 py-3">
+              <div key={label} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3">
                 <span className="text-ink-primary dark:text-slate-200">{label}</span>
-                <div className="flex bg-surface-base dark:bg-dark-surface rounded-lg p-0.5 text-xs" role="radiogroup" aria-label={label}>
+                <div className="ml-auto flex flex-shrink-0 bg-surface-base dark:bg-dark-surface rounded-lg p-0.5 text-xs" role="radiogroup" aria-label={label}>
                   {options.map(([v, l]) => (
                     <button key={v} type="button" role="radio" aria-checked={value === v} onClick={() => onChange(v)}
-                      className={`px-3 py-1 rounded-md ${value === v ? 'bg-white dark:bg-dark-card shadow-card font-medium text-ink-primary dark:text-slate-100' : 'text-ink-secondary'}`}>{l}</button>
+                      className={`px-3 py-1 rounded-md whitespace-nowrap ${value === v ? 'bg-white dark:bg-dark-card shadow-card font-medium text-ink-primary dark:text-slate-100' : 'text-ink-secondary'}`}>{l}</button>
                   ))}
                 </div>
               </div>
@@ -69,33 +69,33 @@ export function SettingsPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-surface-border dark:border-dark-border bg-surface-base dark:bg-dark-base">
-                  <th className="text-left px-4 py-2.5 text-xs font-semibold text-ink-placeholder uppercase tracking-wider">名前</th>
-                  <th className="text-left px-4 py-2.5 text-xs font-semibold text-ink-placeholder uppercase tracking-wider hidden sm:table-cell">Ver</th>
-                  <th className="text-left px-4 py-2.5 text-xs font-semibold text-ink-placeholder uppercase tracking-wider hidden md:table-cell">文字コード</th>
-                  <th className="text-left px-4 py-2.5 text-xs font-semibold text-ink-placeholder uppercase tracking-wider">種別</th>
-                  <th className="text-right px-4 py-2.5 text-xs font-semibold text-ink-placeholder uppercase tracking-wider">状態</th>
-                  <th className="px-4 py-2.5"></th>
+                  <th className="text-left px-3 sm:px-4 py-2.5 text-xs font-semibold text-ink-placeholder uppercase tracking-wider whitespace-nowrap">名前</th>
+                  <th className="text-left px-3 sm:px-4 py-2.5 text-xs font-semibold text-ink-placeholder uppercase tracking-wider whitespace-nowrap hidden sm:table-cell">Ver</th>
+                  <th className="text-left px-3 sm:px-4 py-2.5 text-xs font-semibold text-ink-placeholder uppercase tracking-wider whitespace-nowrap hidden md:table-cell">文字コード</th>
+                  <th className="text-left px-3 sm:px-4 py-2.5 text-xs font-semibold text-ink-placeholder uppercase tracking-wider whitespace-nowrap">種別</th>
+                  <th className="text-right px-3 sm:px-4 py-2.5 text-xs font-semibold text-ink-placeholder uppercase tracking-wider whitespace-nowrap">状態</th>
+                  <th className="px-2 sm:px-4 py-2.5"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-surface-border/50 dark:divide-dark-border/50">
                 {profiles.map(profile => (
                   <tr key={profile.id} className="hover:bg-surface-card/50 dark:hover:bg-dark-card/50 transition-colors">
-                    <td className="px-4 py-3">
+                    <td className="px-3 sm:px-4 py-3">
                       <div className="font-medium text-ink-primary text-sm">{profile.name}</div>
                       <div className="text-xs text-ink-placeholder line-clamp-2">{profile.description}</div>
                     </td>
-                    <td className="px-4 py-3 hidden sm:table-cell">
+                    <td className="px-3 sm:px-4 py-3 hidden sm:table-cell">
                       <span className="font-mono text-xs text-ink-secondary">{profile.version}</span>
                     </td>
-                    <td className="px-4 py-3 hidden md:table-cell">
+                    <td className="px-3 sm:px-4 py-3 hidden md:table-cell">
                       <span className="font-mono text-xs text-ink-secondary">{profile.defaultEncoding}</span>
                     </td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-block px-1.5 py-0.5 rounded text-2xs font-medium ${profile.isBuiltin ? 'bg-primary-100 text-primary-700' : 'bg-sage-400/20 text-sage-600'}`}>
+                    <td className="px-3 sm:px-4 py-3">
+                      <span className={`inline-block px-1.5 py-0.5 rounded text-2xs font-medium whitespace-nowrap ${profile.isBuiltin ? 'bg-primary-100 text-primary-700' : 'bg-sage-400/20 text-sage-600'}`}>
                         {profile.isBuiltin ? '内蔵' : 'カスタム'}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-3 sm:px-4 py-3 text-right">
                       <button
                         onClick={() => toggleEnabled(profile.id)}
                         className={`transition-colors ${profile.enabled ? 'text-status-success' : 'text-ink-placeholder'}`}
@@ -104,7 +104,7 @@ export function SettingsPage() {
                         <FontAwesomeIcon icon={profile.enabled ? faToggleOn : faToggleOff} className="text-lg" />
                       </button>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 sm:px-4 py-3">
                       {!profile.isBuiltin && (
                         <button
                           onClick={() => handleDelete(profile.id)}

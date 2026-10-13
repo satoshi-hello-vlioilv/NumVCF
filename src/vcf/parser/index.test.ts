@@ -139,3 +139,39 @@ describe('parseVCFText robustness', () => {
     expect(contacts[0].meta.notes).toBe('This is a long note that wraps across multiple physical lines per RFC folding.');
   });
 });
+
+describe('text escaping (#3)', () => {
+  it('turns escaped newlines and separators in NOTE back into real characters', () => {
+    const vcf = ['BEGIN:VCARD', 'VERSION:3.0', 'FN:Esc', 'NOTE:1行目\\n2行目\\, カンマ\\; セミコロン \\\\ 円記号', 'END:VCARD'].join('\r\n');
+    const { contacts } = parseVCFText(vcf, { profiles });
+    expect(contacts[0].meta.notes).toBe('1行目\n2行目, カンマ; セミコロン \\ 円記号');
+  });
+
+  it('does not split structured values on escaped separators', () => {
+    const vcf = [
+      'BEGIN:VCARD', 'VERSION:3.0', 'FN:Structured',
+      'ORG:株式会社A\\;B;営業部',
+      'CATEGORIES:取引先,東京\\,大阪',
+      'ADR;TYPE=WORK:;;本町9-24-4;渋谷区;東京都;150-0080;日本',
+      'END:VCARD',
+    ].join('\r\n');
+    const c = parseVCFText(vcf, { profiles }).contacts[0];
+    expect(c.organization).toBe('株式会社A;B');
+    expect(c.department).toBe('営業部');
+    expect(c.meta.tags).toEqual(['取引先', '東京,大阪']);
+    expect(c.addresses[0].value.street).toBe('本町9-24-4');
+  });
+
+  it('joins vCard 2.1 Quoted-Printable soft line breaks', () => {
+    const vcf = [
+      'BEGIN:VCARD', 'VERSION:2.1', 'FN:QP',
+      'NOTE;CHARSET=UTF-8;ENCODING=QUOTED-PRINTABLE:=E4=B8=80=E8=A1=8C=E7=9B=AE=0D=0A=',
+      '=E4=BA=8C=E8=A1=8C=E7=9B=AE',
+      'TEL:03-0000-0000',
+      'END:VCARD',
+    ].join('\r\n');
+    const c = parseVCFText(vcf, { profiles }).contacts[0];
+    expect(c.meta.notes).toBe('一行目\r\n二行目');
+    expect(c.phones[0].value).toBe('03-0000-0000');
+  });
+});

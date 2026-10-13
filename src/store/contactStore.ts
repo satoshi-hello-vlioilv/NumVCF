@@ -20,6 +20,7 @@ interface ContactStore {
 
   loadContacts: () => Promise<void>;
   addContact: (contact: Contact) => Promise<void>;
+  importContacts: (incoming: Contact[], onProgress?: (done: number, total: number) => void) => Promise<{ added: number; skippedDuplicateUid: number }>;
   updateContact: (id: string, updates: Partial<Contact>) => Promise<void>;
   deleteContact: (id: string) => Promise<void>;
   deleteContacts: (ids: string[]) => Promise<void>;
@@ -90,6 +91,27 @@ export const useContactStore = create<ContactStore>()(
     addContact: async (contact) => {
       await db.contacts.add(contact);
       set(s => { s.contacts.push(contact); });
+    },
+
+    // Writes in chunks with one bulkAdd each and updates the store once at the
+    // end; adding one row at a time re-rendered the whole list per contact.
+    importContacts: async (incoming, onProgress) => {
+      const knownUids = new Set(get().contacts.map(c => c.uid).filter((u): u is string => !!u));
+      const toAdd: Contact[] = [];
+      let skippedDuplicateUid = 0;
+      for (const c of incoming) {
+        if (c.uid && knownUids.has(c.uid)) { skippedDuplicateUid++; continue; }
+        if (c.uid) knownUids.add(c.uid);
+        toAdd.push(c);
+      }
+      const CHUNK = 500;
+      onProgress?.(0, toAdd.length);
+      for (let i = 0; i < toAdd.length; i += CHUNK) {
+        await db.contacts.bulkAdd(toAdd.slice(i, i + CHUNK));
+        onProgress?.(Math.min(i + CHUNK, toAdd.length), toAdd.length);
+      }
+      set(s => { s.contacts.push(...toAdd); });
+      return { added: toAdd.length, skippedDuplicateUid };
     },
 
     updateContact: async (id, updates) => {

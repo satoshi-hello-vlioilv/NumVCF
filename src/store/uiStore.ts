@@ -21,6 +21,9 @@ interface UIStore {
   isImportModalOpen: boolean;
   isExportModalOpen: boolean;
   selectedIds: Set<string>;
+  // Selection mode entered from the "選択" button, so a selection can start
+  // with zero items on screens without a checkbox column.
+  isSelecting: boolean;
   toasts: Toast[];
 
   setDensity: (d: DisplayDensity) => void;
@@ -29,6 +32,7 @@ interface UIStore {
   setImportModalOpen: (open: boolean) => void;
   setExportModalOpen: (open: boolean) => void;
   toggleSelectId: (id: string) => void;
+  setSelecting: (on: boolean) => void;
   clearSelection: () => void;
   selectAll: (ids: string[]) => void;
   addToast: (toast: Omit<Toast, 'id'>) => void;
@@ -44,6 +48,7 @@ export const useUIStore = create<UIStore>()(
       isImportModalOpen: false,
       isExportModalOpen: false,
       selectedIds: new Set(),
+      isSelecting: false,
       toasts: [],
 
       setDensity: (d) => set(s => { s.density = d; }),
@@ -57,7 +62,8 @@ export const useUIStore = create<UIStore>()(
         if (next.has(id)) next.delete(id); else next.add(id);
         s.selectedIds = next;
       }),
-      clearSelection: () => set(s => { s.selectedIds = new Set(); }),
+      setSelecting: (on) => set(s => { s.isSelecting = on; if (!on) s.selectedIds = new Set(); }),
+      clearSelection: () => set(s => { s.selectedIds = new Set(); s.isSelecting = false; }),
       selectAll: (ids) => set(s => { s.selectedIds = new Set(ids); }),
 
       addToast: (toast) => set(s => {

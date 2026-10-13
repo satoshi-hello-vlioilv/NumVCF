@@ -1,16 +1,15 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faAddressBook, faFileImport, faPlus, faMagnifyingGlass } from '@fortawesome/free-solid-svg-icons';
-import { Sidebar } from './Sidebar';
-import { MobileTopBar } from './MobileTopBar';
-import { OverviewStrip } from './OverviewStrip';
-import { ListToolbar } from './ListToolbar';
+import { TopBar } from './TopBar';
+import { ListToolbar, SelectionBar } from './ListToolbar';
 import { ContactTable } from '../contacts/ContactTable';
+import { WIDE_TABLE_MIN } from '../contacts/tableLayout';
 import { ContactMobileList } from '../contacts/ContactMobileList';
 import { ContactDetail } from '../contacts/ContactDetail';
 import { AlphabetIndex } from '../contacts/AlphabetIndex';
-import { SearchInput, SEARCH_INPUT_ID } from '../search/SearchInput';
+import { SEARCH_INPUT_ID } from '../search/SearchInput';
 import { ImportCenter } from '../vcf/ImportCenter';
 import { ExportCenter } from '../vcf/ExportCenter';
 import { ToastContainer } from '../ui/Toast';
@@ -18,7 +17,14 @@ import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { useContactStore, filterContacts } from '../../store/contactStore';
 import { useUIStore } from '../../store/uiStore';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
-import { groupContacts, groupAnchorId } from '../../utils/grouping';
+import { groupContacts } from '../../utils/grouping';
+import { useVirtualRows } from '../../hooks/useVirtualRows';
+import { useWidthOf } from '../../hooks/useElementWidth';
+import type { DisplayDensity } from '../../types/contact';
+
+const TABLE_ROW_H: Record<DisplayDensity, number> = { compact: 41, comfortable: 45, spacious: 57 };
+const TWO_LINE_TABLE_ROW_H: Record<DisplayDensity, number> = { compact: 49, comfortable: 53, spacious: 65 };
+const LIST_ROW_H: Record<DisplayDensity, number> = { compact: 53, comfortable: 57, spacious: 69 };
 
 const NON_TEXT_INPUTS = new Set(['checkbox', 'radio', 'button', 'submit', 'reset', 'range', 'color', 'file']);
 
@@ -33,24 +39,22 @@ export function AppShell() {
   const isMd = useMediaQuery('(min-width: 768px)');
   const { contacts, isLoaded, selectedId, setSelectedId, sortField, sortOrder, searchQuery, filter, deleteContacts } = useContactStore();
   const {
-    groupMode, isImportModalOpen, setImportModalOpen, isExportModalOpen, setExportModalOpen,
-    selectedIds, clearSelection, addToast,
+    groupMode, density, isImportModalOpen, setImportModalOpen, isExportModalOpen, setExportModalOpen,
+    selectedIds, isSelecting, clearSelection, addToast,
   } = useUIStore();
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
 
   const visible = useMemo(() => filterContacts(contacts, searchQuery, filter, sortField, sortOrder), [contacts, searchQuery, filter, sortField, sortOrder]);
   const groups = useMemo(() => groupContacts(visible, groupMode, sortField), [visible, groupMode, sortField]);
   const ordered = useMemo(() => groups.flatMap(g => g.contacts), [groups]);
+  const visibleIds = useMemo(() => ordered.map(c => c.id), [ordered]);
   const selected = contacts.find(c => c.id === selectedId) ?? null;
   const showIndex = groupMode === 'kana' && groups.length > 1;
 
-  const jumpTo = (key: string) => {
-    document.getElementById(groupAnchorId(key))?.scrollIntoView({ block: 'start' });
-  };
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === 'Escape') {
-      if (selectedIds.size > 0) clearSelection();
+      if (selectedIds.size > 0 || isSelecting) clearSelection();
       else setSelectedId(null);
       return;
     }
@@ -67,7 +71,7 @@ export function AppShell() {
       const next = e.key === 'ArrowDown' ? Math.min(idx + 1, ordered.length - 1) : Math.max(idx - 1, 0);
       setSelectedId(ordered[idx === -1 ? 0 : next].id);
     }
-  }, [selectedIds, clearSelection, setSelectedId, navigate, setImportModalOpen, setExportModalOpen, selectedId, ordered]);
+  }, [selectedIds, isSelecting, clearSelection, setSelectedId, navigate, setImportModalOpen, setExportModalOpen, selectedId, ordered]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
@@ -86,6 +90,21 @@ export function AppShell() {
   // Below lg the screen is too narrow for list + detail side by side, so the
   // detail takes the whole width and the list returns when it is closed.
   const listHiddenOnMobile = detailOpen && !isLg;
+  const asTable = isMd && !detailOpen;
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
+  const setScrollRef = useCallback((el: HTMLDivElement | null) => { scrollRef.current = el; setScrollEl(el); }, []);
+  const listWidth = useWidthOf(scrollEl);
+  const twoLineTable = listWidth < WIDE_TABLE_MIN;
+  const virtual = useVirtualRows(groups, scrollRef, {
+    rowHeight: asTable ? (twoLineTable ? TWO_LINE_TABLE_ROW_H : TABLE_ROW_H)[density] : LIST_ROW_H[density],
+    headerHeight: asTable ? 27 : 26,
+    scrollPaddingStart: asTable ? 33 : 26,
+  });
+  const { scrollToContact } = virtual;
+  useEffect(() => {
+    if (selectedId) scrollToContact(selectedId);
+  }, [selectedId, scrollToContact]);
 
   let listBody: React.ReactNode;
   if (!isLoaded) {
@@ -110,35 +129,30 @@ export function AppShell() {
       </div>
     );
   } else {
-    listBody = isMd
-      ? <ContactTable groups={groups} mode={groupMode} narrow={detailOpen} />
-      : <ContactMobileList groups={groups} mode={groupMode} />;
+    // With a contact open, the list narrows to two-line rows (name / org +
+    // phone) instead of a cramped table, so no column ever gets cut off.
+    listBody = asTable
+      ? <ContactTable virtual={virtual} mode={groupMode} width={listWidth} />
+      : <ContactMobileList virtual={virtual} mode={groupMode} callButton={!detailOpen} />;
   }
 
   return (
     <div className="h-screen flex bg-surface-base dark:bg-dark-base text-ink-primary dark:text-slate-100 overflow-hidden">
-      {isLg && <Sidebar />}
-
       <div className="flex-1 min-w-0 flex flex-col">
-        {!isLg && !listHiddenOnMobile && <MobileTopBar />}
+        {!listHiddenOnMobile && <TopBar />}
 
         <div className="flex-1 min-h-0 flex">
           {!listHiddenOnMobile && (
             <section
               aria-label="連絡先一覧"
-              className={`${detailOpen ? 'w-[500px] flex-shrink-0' : 'flex-1'} min-w-0 flex flex-col bg-white dark:bg-dark-card border-r border-surface-border dark:border-dark-border`}
+              className={`${detailOpen ? 'w-80 xl:w-96 flex-shrink-0' : 'flex-1'} min-w-0 flex flex-col bg-white dark:bg-dark-card border-r border-surface-border dark:border-dark-border`}
             >
-              {isLg && (
-                <div className="flex items-center gap-2 px-3 h-14 border-b border-surface-border dark:border-dark-border flex-shrink-0">
-                  <SearchInput placeholder={detailOpen ? '検索（/）' : '名前・会社・電話番号・メール・タグで検索（/）'} />
-                </div>
-              )}
-              {isLg && !detailOpen && contacts.length > 0 && <OverviewStrip />}
-              {contacts.length > 0 && <ListToolbar count={visible.length} visibleIds={ordered.map(c => c.id)} onBulkDelete={() => setConfirmBulkDelete(true)} />}
+              {contacts.length > 0 && <ListToolbar count={visible.length} total={contacts.length} visibleIds={visibleIds} onBulkDelete={() => setConfirmBulkDelete(true)} compact={!asTable} />}
               <div className="flex-1 min-h-0 flex">
-                <div className="flex-1 min-w-0 overflow-auto">{listBody}</div>
-                {showIndex && visible.length > 0 && <AlphabetIndex availableKeys={new Set(groups.map(g => g.key))} onSelect={jumpTo} />}
+                <div ref={setScrollRef} className="flex-1 min-w-0 overflow-auto">{listBody}</div>
+                {showIndex && visible.length > 0 && <AlphabetIndex availableKeys={new Set(groups.map(g => g.key))} onSelect={virtual.scrollToGroup} />}
               </div>
+              {!asTable && (isSelecting || selectedIds.size > 0) && <SelectionBar visibleIds={visibleIds} onBulkDelete={() => setConfirmBulkDelete(true)} />}
             </section>
           )}
 
